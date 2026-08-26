@@ -135,7 +135,13 @@ async function enrich(token: string, item: SearchItem): Promise<PullRequest> {
       .map((run) => run.name ?? "check");
 
     const running = checks.check_runs.some((run) => run.status !== "completed");
-    base.checks = resolveChecks(status.state, base.hasCI, base.failedChecks.length > 0, running);
+    base.checks = resolveChecks(
+      status.state,
+      status.total_count,
+      checks.total_count,
+      base.failedChecks.length > 0,
+      running,
+    );
   } catch {
     // A single PR failing to enrich must not lose the whole refresh; it shows
     // with unknown state rather than disappearing.
@@ -144,15 +150,24 @@ async function enrich(token: string, item: SearchItem): Promise<PullRequest> {
   return base;
 }
 
-function resolveChecks(
+/**
+ * The combined-status API answers `state: "pending"` for a commit that has no
+ * legacy statuses at all — which is every repository running only GitHub
+ * Actions. Its state therefore means nothing unless `total_count` says there is
+ * something to report, and reading it unconditionally marks every PR in such a
+ * repository as "checks still running" forever.
+ */
+export function resolveChecks(
   commitState: string,
-  hasCI: boolean,
+  commitCount: number,
+  checkRunsCount: number,
   anyFailed: boolean,
   anyRunning: boolean,
 ): CheckStatus {
-  if (!hasCI) return "success";
-  if (anyFailed || commitState === "failure" || commitState === "error") return "failure";
-  if (anyRunning || commitState === "pending") return "pending";
+  if (commitCount === 0 && checkRunsCount === 0) return "success";
+  const legacy = commitCount > 0 ? commitState : "";
+  if (anyFailed || legacy === "failure" || legacy === "error") return "failure";
+  if (anyRunning || legacy === "pending") return "pending";
   return "success";
 }
 

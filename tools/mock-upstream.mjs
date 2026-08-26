@@ -53,7 +53,9 @@ createServer(async (req, res) => {
   if (m) return json(res, fixture.reviews[`${m[1]}/${m[2]}/${m[3]}`] ?? []);
 
   m = path.match(/^\/repos\/[^/]+\/[^/]+\/commits\/([0-9a-f]+)\/status$/);
-  if (m) return json(res, fixture.statuses[m[1]] ?? { state: "success", total_count: 0 });
+  // Matches reality: Actions-only repositories have no legacy statuses, and
+  // the combined-status API calls that "pending".
+  if (m) return json(res, { state: "pending", total_count: 0 });
 
   m = path.match(/^\/repos\/[^/]+\/[^/]+\/commits\/([0-9a-f]+)\/check-runs$/);
   if (m) return json(res, fixture.checkruns[m[1]] ?? { total_count: 0, check_runs: [] });

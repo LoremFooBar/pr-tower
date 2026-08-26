@@ -1,6 +1,7 @@
 import { buildModel } from "../src/core/model";
 import { buildItem, gatesFor, scoreFor } from "../src/core/rank";
 import { canonicalPRUrl, linkPR, buildIssueIndex, prTicketKey, stripTicketPrefix } from "../src/core/link";
+import { resolveChecks } from "../server/github";
 import type { LinearIssue, PullRequest } from "../src/core/types";
 
 const NOW = new Date("2026-08-26T12:00:00Z").getTime();
@@ -441,5 +442,31 @@ describe("buildModel", () => {
     );
     const order = model.bays[0].tickets.flatMap((node) => node.items).map((item) => item.pr.number);
     expect(order).toEqual([3, 2, 4, 1]);
+  });
+});
+
+describe("resolveChecks", () => {
+  // Reproduces the real shape: repositories that run only GitHub Actions have
+  // no legacy statuses, and the combined-status API reports those as "pending".
+  const actionsOnly = (failed: boolean, running: boolean) =>
+    resolveChecks("pending", 0, 35, failed, running);
+
+  it("does not read the legacy state when there are no legacy statuses", () => {
+    expect(actionsOnly(false, false)).toBe("success");
+  });
+
+  it("still reports a failure and a genuinely running check", () => {
+    expect(actionsOnly(true, false)).toBe("failure");
+    expect(actionsOnly(false, true)).toBe("pending");
+  });
+
+  it("reads the legacy state when the commit actually has statuses", () => {
+    expect(resolveChecks("pending", 2, 0, false, false)).toBe("pending");
+    expect(resolveChecks("failure", 2, 0, false, false)).toBe("failure");
+    expect(resolveChecks("success", 2, 0, false, false)).toBe("success");
+  });
+
+  it("treats a repository with no CI at all as green", () => {
+    expect(resolveChecks("pending", 0, 0, false, false)).toBe("success");
   });
 });

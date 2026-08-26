@@ -241,44 +241,6 @@
   "acme/toolbox/12": [],
   "acme/web/888": []
  },
- "statuses": {
-  "ba33cebd33f6e549a415bb6c3077d0ad49d8784f": {
-   "state": "success",
-   "total_count": 1
-  },
-  "584c3fb9c360940fe53a31c65ca3fced467704df": {
-   "state": "success",
-   "total_count": 1
-  },
-  "78f47506fe072d4c6ea83531e058fb9316407119": {
-   "state": "success",
-   "total_count": 1
-  },
-  "4d6790435f25c6499f49e00f42b7a5da0d683c6e": {
-   "state": "success",
-   "total_count": 1
-  },
-  "6f21c54d63907893d52c532d52be51e367428f27": {
-   "state": "failure",
-   "total_count": 1
-  },
-  "1e519a4ab68d7ae691c8b77bbb61a63c5754e7ee": {
-   "state": "pending",
-   "total_count": 1
-  },
-  "2d8153b2b46b2bbc39c8b58ded8435dc8e9b83bd": {
-   "state": "success",
-   "total_count": 1
-  },
-  "76a21704cfc18239aca4e25056df7746c64735aa": {
-   "state": "success",
-   "total_count": 1
-  },
-  "e47baf6a77444e6d1aea6638fd8d3ddf6c39bfde": {
-   "state": "success",
-   "total_count": 1
-  }
- },
  "checkruns": {
   "ba33cebd33f6e549a415bb6c3077d0ad49d8784f": {
    "total_count": 3,
