@@ -1,0 +1,29 @@
+{
+  "name": "pr-tower-web",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "A single-file web app that ranks your open PRs and sends the ready ones for review.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "test": "jest",
+    "preview": "vite preview",
+    "verify": "node tools/shoot.mjs",
+    "fonts": "node tools/fetch-fonts.mjs"
+  },
+  "dependencies": {
+    "preact": "^10.27.2"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "^2.10.2",
+    "@swc/core": "^1.15.43",
+    "@swc/jest": "^0.2.39",
+    "@types/jest": "^30.0.0",
+    "jest": "^30.4.2",
+    "jest-environment-jsdom": "^30.4.1",
+    "playwright": "^1.62.1",
+    "typescript": "^5.9.3",
+    "vite": "^6.4.3"
+  }
+}
