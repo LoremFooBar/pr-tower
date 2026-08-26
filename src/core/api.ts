@@ -1,4 +1,4 @@
-import type { LinearIssue, PullRequest } from "./types";
+import type { EpicRollup, LinearIssue, PullRequest } from "./types";
 
 // The browser never holds a token. Every call goes to this app's own backend,
 // which attaches the credentials it keeps inside the container.
@@ -15,6 +15,7 @@ export interface Status {
 export interface Data {
   prs: PullRequest[];
   issues: LinearIssue[];
+  rollups: EpicRollup[];
   at: number;
   login: string;
 }
@@ -49,4 +50,9 @@ export function saveConfig(input: ConfigInput): Promise<{ ok: true }> {
 
 export function sendForReview(nodeId: string): Promise<{ ok: true }> {
   return call("/api/send", { method: "POST", body: JSON.stringify({ nodeId }) });
+}
+
+/** Puts a PR back into draft, so a release can be taken back. */
+export function undoRelease(nodeId: string): Promise<{ ok: true }> {
+  return call("/api/undo", { method: "POST", body: JSON.stringify({ nodeId }) });
 }

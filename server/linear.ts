@@ -1,4 +1,4 @@
-import type { LinearIssue, LinearStateType } from "../src/core/types";
+import type { EpicRollup, LinearIssue, LinearStateType } from "../src/core/types";
 
 const API = process.env.LINEAR_API ?? "https://api.linear.app/graphql";
 const PAGE_SIZE = 100;
@@ -12,6 +12,7 @@ interface RawState {
 }
 
 interface RawParent {
+  id: string;
   identifier: string;
   title: string;
   url: string;
@@ -52,6 +53,7 @@ function stateType(raw: string | undefined): LinearStateType {
 function common(raw: RawParent) {
   return {
     id: raw.identifier,
+    uuid: raw.id,
     title: raw.title,
     url: raw.url,
     stateName: raw.state?.name ?? "Unknown",
@@ -85,7 +87,7 @@ export async function validateKey(key: string): Promise<string> {
 }
 
 const FIELDS = `
-  identifier title url priority
+  id identifier title url priority
   state { name type }
   project { name }
 `;
@@ -128,4 +130,60 @@ export async function fetchAssignedIssues(key: string): Promise<LinearIssue[]> {
   for (const [id, stub] of parents) if (!seen.has(id)) issues.push(stub);
 
   return issues;
+}
+
+const CHILDREN = `
+  query Children($ids: [ID!]) {
+    issues(first: 250, filter: { parent: { id: { in: $ids } } }) {
+      nodes {
+        parent { identifier }
+        state { type }
+      }
+    }
+  }
+`;
+
+// Counts every sub-ticket of each parent, whoever it is assigned to. The
+// assigned-issue fetch cannot answer this: an epic's children include tickets
+// assigned to nobody or to someone else, and counting only your own would
+// report an epic as further along than it is.
+export async function fetchEpicRollups(
+  key: string,
+  parentUuids: string[],
+): Promise<EpicRollup[]> {
+  if (parentUuids.length === 0) return [];
+
+  const data = await graphql<{
+    issues: { nodes: { parent: { identifier: string } | null; state: RawState | null }[] };
+  }>(key, CHILDREN, { ids: parentUuids });
+
+  const byParent = new Map<string, EpicRollup>();
+  for (const node of data.issues.nodes) {
+    const parent = node.parent?.identifier;
+    if (!parent) continue;
+    let rollup = byParent.get(parent);
+    if (!rollup) {
+      rollup = { parentId: parent, done: 0, canceled: 0, started: 0, todo: 0, backlog: 0, live: 0 };
+      byParent.set(parent, rollup);
+    }
+    switch (stateType(node.state?.type)) {
+      case "completed":
+        rollup.done++;
+        break;
+      case "canceled":
+        rollup.canceled++;
+        break;
+      case "started":
+        rollup.started++;
+        break;
+      case "unstarted":
+        rollup.todo++;
+        break;
+      default:
+        rollup.backlog++;
+    }
+    if (stateType(node.state?.type) !== "canceled") rollup.live++;
+  }
+
+  return [...byParent.values()];
 }

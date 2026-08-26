@@ -48,6 +48,9 @@ export type LinearStateType =
 
 export interface LinearIssue {
   id: string;
+  // Linear's UUID. Needed to ask for an epic's children, whose filter takes
+  // UUIDs rather than the ACME-1234 identifier a PR title carries.
+  uuid?: string;
   title: string;
   url: string;
   stateName: string;
@@ -58,6 +61,20 @@ export interface LinearIssue {
   projectName?: string;
   blockedBy: string[];
   prUrls: string[];
+}
+
+// Every sub-ticket of a parent, counted by state. Gathered separately from the
+// assigned-issue fetch because an epic's children include tickets assigned to
+// nobody, or to someone else, and leaving those out would overstate progress.
+export interface EpicRollup {
+  parentId: string;
+  done: number;
+  canceled: number;
+  started: number;
+  todo: number;
+  backlog: number;
+  /** Everything that is not canceled — the honest denominator. */
+  live: number;
 }
 
 export type SignalKind =
@@ -121,6 +138,16 @@ export interface TicketNode {
   items: Item[];
 }
 
+// One cell of a bay's spine, in ticket order. "done" needs the closed-ticket
+// rollup; the rest come from the open PRs.
+export type SpineCell = "done" | "cleared" | "needs" | "waiting" | "blocked";
+
+export interface NextMove {
+  kind: "merge" | "release" | "fix" | "waiting";
+  text: string;
+  item?: Item;
+}
+
 export interface Group {
   key: string;
   title: string;
@@ -128,4 +155,21 @@ export interface Group {
   tickets: TicketNode[];
   count: number;
   repos: number;
+  /** How many of the open PRs in this group sit in each lane. */
+  lanes: Record<Lane, number>;
+  /** Sub-ticket counts across the whole parent, closed ones included. */
+  rollup?: EpicRollup;
+  /** Set when every open PR in the group is waiting on the same ticket. */
+  blockedOn?: string;
+  /** The highest score of any PR in the group, for ordering. */
+  peak: number;
+  /** Read left to right, the shape of the whole effort. */
+  spine: SpineCell[];
+  /** One sentence: the highest-leverage thing to do here. */
+  move: NextMove;
+  /**
+   * A bay gets its own section; anything else is one row in the singles ledger.
+   * An epic earns a bay by having two or more open PRs.
+   */
+  bay: boolean;
 }

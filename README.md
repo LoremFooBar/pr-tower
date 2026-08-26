@@ -18,23 +18,38 @@ It restarts with Docker, so there is nothing to run by hand afterwards.
 
 ## What it does
 
-**Ready to send** is the point of the app. It lists the drafts that could go out
-right now, most important first, with a Send for review button on each and a
-checkbox for sending several at once.
+The page is one board, with no tabs.
 
-A draft is ready when all three gates are open:
+**Cleared** sits at the top: every draft whose three gates are open, ranked by
+how much it matters, each with a release button. When nothing is cleared it names
+the draft that is closest and what is holding it.
 
 | Gate | Shut when |
 |---|---|
 | **CI** | A check failed, or checks are still running |
-| **Merge** | The branch conflicts with its base |
-| **Path** | Linear says the ticket is blocked by another ticket that still has an open PR of yours |
+| **MG** | The branch conflicts with its base |
+| **BL** | Linear says the ticket is blocked by another ticket that still has an open PR of yours |
 
-These three are deliberately the whole list. They are the conditions under which
-asking someone to review would waste their time. Being behind the base branch,
-or idle for a month, does not stop a review — those show as context instead.
+Below it, one **bay per epic** — but only for an epic with two or more open PRs.
+Each bay header carries a spine and a next move:
 
-Order is by how much a PR matters, and the chips under each row are the entire
+```
+▾ ACME-288  USAGE-BASED BILLING ROLLOUT        URGENT · IN PROGRESS
+  ▪▪▪▪▪▮▮▯▯▥▥  23 done · 2 cleared · 3 need you · 2 waiting   next → release ACME-1114
+```
+
+The spine is one cell per sub-issue: muted done, magenta cleared, amber needs
+you, steel waiting, hollow blocked. Done cells come from a query that counts
+every sub-ticket, including the ones assigned to nobody — without it, nothing
+claims progress.
+
+Everything with a single PR drops into the **Singles** ledger, one row each, with
+its epic named inline. Tooling PRs with no ticket sit muted at the bottom.
+
+Rows sort the same way everywhere: cleared, then what needs you, then what is
+waiting on other people, then what is blocked by another ticket.
+
+Order is by how much a PR matters, and the chips on each card are the entire
 calculation, so you can disagree with it:
 
 | Part | Points |
@@ -44,25 +59,26 @@ calculation, so you can disagree with it:
 | Ticket is started (In Progress, In Review, Rollout) | 12 — or 4 if only Todo |
 | Days idle | 0.6 a day, capped at 18 |
 
-An unset priority scores just under Medium rather than at the bottom: not
-setting one is not the same as saying it does not matter. The age cap keeps an
-ancient low-priority PR from outranking an urgent one.
-
-**Held back** shows the drafts with a gate shut, nearest to ready first, each
-naming the one thing in the way.
-
-**Out for review** is what you are waiting on other people for, with anything
-already approved pulled to the top.
-
-**Everything** groups every open PR under its Linear sub-ticket and parent epic.
-A ticket owning several PRs across repositories keeps them together.
+An unset priority scores just under Medium rather than at the bottom: not setting
+one is not the same as saying it does not matter. The age cap keeps an ancient
+low-priority PR from outranking an urgent one.
 
 ## Sending
 
-Send takes the PR out of draft through GitHub's `markPullRequestReadyForReview`
-mutation — REST cannot do it. Reviewers are requested automatically by the
-repository's own rules, so this notifies people, and the app confirms before it
-sends. It is reversible: convert back to draft on GitHub.
+Release takes the PR out of draft through GitHub's
+`markPullRequestReadyForReview` mutation — REST cannot do it. Reviewers are
+requested automatically by the repository's own rules, so this notifies people,
+and the app confirms first.
+
+Release one from its card or row, or tick several and release them together. Two
+PRs on one ticket are tied together in the gutter and select as a pair, so a
+change that has to land in two repositories cannot go out half-done by accident.
+
+For ten seconds afterwards the toast offers **undo**, which converts the PR back
+to draft. After that, do it on GitHub.
+
+The release button is the only thing on the page painted in the accent colour. If
+there is no magenta on screen, there is nothing to release.
 
 ## Setup
 

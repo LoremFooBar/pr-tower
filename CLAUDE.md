@@ -102,23 +102,66 @@ rendering. `src/core/types.ts` is the contract, imported by both.
 - **A blocker is spent once its PR merges.** `openTickets` gates that.
 - **An epic that owns a PR and sub-tickets groups under itself**, otherwise its
   own PR strands in "Standalone tickets".
-- **Whatever a row explains in prose, it does not repeat as a pill.** The Held
-  lane's gate line owns the blocking reason; the Send lane's chips own the
-  ranking.
+- **Nothing is said twice on one row.** The card's reason chips own the score, so
+  the card foot does not repeat idle days.
+- **PRs of one ticket land together.** They are tied by a rule in the row gutter
+  and select as a pair, because the gutter's glyph slot is taken by the release
+  checkbox — exactly the row where the pairing matters most.
+- **Blocked is not "need you".** A bay's counts separate them; there is nothing
+  to do about a blocked PR yet.
+
+## Information architecture
+
+There are **no tabs**. Readiness was tried as the navigation axis and rejected by
+the user: "I don't care that much about overall prs status so the tabs are
+currently useless to me." Every real decision needs readiness *and* context at
+once, so readiness is demoted — visible always, navigated never.
+
+One scrolling page, in this order:
+
+1. **Cleared queue** — pinned cards for every draft whose three gates are open,
+   ranked by score. When empty it names the draft closest to clearing.
+2. **Bays** — one per epic, ordered by epic priority then id. The order is
+   deliberately **stable**: a board kept open all day must not reshuffle between
+   glances. Urgency already has a home in the queue.
+3. **Singles ledger** — one-PR epics and standalone tickets, one row each.
+4. **No ticket** — tooling PRs, muted, last.
+
+**A bay exists only for an epic with two or more open PRs.** A single PR of
+information costs a single row, so a 1-PR epic never generates as much furniture
+as the 7-PR one. This is `Group.bay` in the model.
+
+Rows everywhere sort on one ladder (`rung` in `model.ts`): cleared → needs-you →
+waiting → blocked-by-dependency. Blocked sorts *last*, below even the PRs waiting
+on other people, because there is nothing to do about it until the other ticket
+lands.
 
 ## Design
 
-An instrument panel, deliberately not a dashboard. One accent (aqua), spent in
-exactly one place: the moment a PR is clear to go out. Red and amber are state
-only, so nothing competes with the release signal.
+A **flight progress strip board**. Towers rack paper strips in bays; each PR is a
+strip, each epic is a bay, and releasing a PR is clearing a departure. Hard
+columns, tabular numerals, 2px radius, restrained colour.
 
-The signature is the **gate rail** — three bars at the left of every row that
-fill as gates open and light aqua only when all three are. It is the same object
-in every lane, which is what makes the Held lane readable at a glance: you see
-*which* bar is dark.
+The palette rule is the whole design: **the accent (magenta, `--squawk`) is spent
+only on release affordances.** If there is no magenta on screen, there is nothing
+to release. A "next → merge X" pointer is steel, not magenta, because the merge
+button lives on GitHub — painting it accent would break the rule.
 
-Typefaces are Chivo and Chivo Mono, embedded as data URIs by
-`npm run fonts` so the file makes no external request.
+Two signature elements:
+
+- **The bay spine** — one cell per sub-issue, read left to right: muted for done,
+  magenta cleared, amber needs-you, steel waiting, hollow blocked. It answers
+  "how much is in flight, what colour is the bottleneck" without reading a row.
+  The done cells require the rollup; without it no copy claims progress.
+- **The gate block** — `CI MG BL`, solid when open, amber when shut for something
+  fixable, faint when pending or blocked. On a PR already out for review the same
+  column carries review shorthand instead (`✓2`, `±1`, `bot–`), because gates
+  have stopped being the question. The old aqua all-clear glow is gone: "all
+  gates open" is now expressed by the release button existing at all.
+
+Typefaces are **Archivo** (variable, the `wdth` axis drives the racked-label look
+on bay headers) and **Spline Sans Mono** for every identifier and number, both
+embedded as data URIs by `npm run fonts`.
 
 ## Testing
 

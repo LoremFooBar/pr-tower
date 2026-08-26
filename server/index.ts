@@ -2,10 +2,10 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { fetchMyOpenPRs, sendForReview, validateToken } from "./github";
-import { fetchAssignedIssues, validateKey } from "./linear";
+import { convertToDraft, fetchMyOpenPRs, sendForReview, validateToken } from "./github";
+import { fetchAssignedIssues, fetchEpicRollups, validateKey } from "./linear";
 import { envPinned, loadTokens, saveTokens } from "./config";
-import type { LinearIssue, PullRequest } from "../src/core/types";
+import type { EpicRollup, LinearIssue, PullRequest } from "../src/core/types";
 
 const PORT = Number(process.env.PORT ?? 5178);
 const here = dirname(fileURLToPath(import.meta.url));
@@ -19,6 +19,7 @@ const FRESH_MS = 15 * 60 * 1000;
 interface Snapshot {
   prs: PullRequest[];
   issues: LinearIssue[];
+  rollups: EpicRollup[];
   at: number;
   login: string;
 }
@@ -92,9 +93,25 @@ function refresh(force: boolean): Promise<Snapshot> {
     const issues = tokens.linearKey
       ? await fetchAssignedIssues(tokens.linearKey).catch(() => [] as LinearIssue[])
       : [];
+
+    // Progress per parent needs every child, including the ones assigned to
+    // nobody, so it is a separate query keyed by the parents actually in play.
+    const parentUuids = [
+      ...new Set(
+        issues
+          .filter((issue) => issues.some((child) => child.parentId === issue.id))
+          .map((issue) => issue.uuid)
+          .filter((uuid): uuid is string => Boolean(uuid)),
+      ),
+    ];
+    const rollups =
+      tokens.linearKey && parentUuids.length > 0
+        ? await fetchEpicRollups(tokens.linearKey, parentUuids).catch(() => [] as EpicRollup[])
+        : [];
+
     const prs = await fetchMyOpenPRs(tokens.githubToken, user.login, tokens.org);
 
-    const next: Snapshot = { prs, issues, at: Date.now(), login: user.login };
+    const next: Snapshot = { prs, issues, rollups, at: Date.now(), login: user.login };
     snapshot = next;
     writeSnapshot(next);
     return next;
@@ -150,33 +167,49 @@ const routes: Record<string, (req: IncomingMessage, res: ServerResponse, url: UR
   async "GET /api/data"(_req, res, url) {
     try {
       const data = await refresh(url.searchParams.get("force") === "1");
-      send(res, 200, { prs: data.prs, issues: data.issues, at: data.at, login: data.login });
+      send(res, 200, {
+        prs: data.prs,
+        issues: data.issues,
+        rollups: data.rollups,
+        at: data.at,
+        login: data.login,
+      });
     } catch (err) {
       send(res, 502, { error: err instanceof Error ? err.message : "Refresh failed." });
     }
   },
 
   async "POST /api/send"(req, res) {
-    const body = (await readJson(req)) as { nodeId?: string };
-    if (!body.nodeId) return send(res, 400, { error: "nodeId is required." });
-    const tokens = loadTokens();
-    if (!tokens.githubToken) return send(res, 400, { error: "No GitHub token is configured." });
-    try {
-      await sendForReview(tokens.githubToken, body.nodeId);
-      // The PR is no longer a draft; reflect that without a full refetch.
-      if (snapshot) {
-        snapshot = {
-          ...snapshot,
-          prs: snapshot.prs.map((pr) => (pr.nodeId === body.nodeId ? { ...pr, draft: false } : pr)),
-        };
-        writeSnapshot(snapshot);
-      }
-      send(res, 200, { ok: true });
-    } catch (err) {
-      send(res, 502, { error: err instanceof Error ? err.message : "Send failed." });
-    }
+    await flipDraft(req, res, false);
+  },
+
+  async "POST /api/undo"(req, res) {
+    await flipDraft(req, res, true);
   },
 };
+
+// Both writes are the same shape: change one PR's draft flag at GitHub, then
+// mirror it in the snapshot so the board is right before the next refresh.
+async function flipDraft(req: IncomingMessage, res: ServerResponse, toDraft: boolean): Promise<void> {
+  const body = (await readJson(req)) as { nodeId?: string };
+  if (!body.nodeId) return send(res, 400, { error: "nodeId is required." });
+  const tokens = loadTokens();
+  if (!tokens.githubToken) return send(res, 400, { error: "No GitHub token is configured." });
+  try {
+    if (toDraft) await convertToDraft(tokens.githubToken, body.nodeId);
+    else await sendForReview(tokens.githubToken, body.nodeId);
+    if (snapshot) {
+      snapshot = {
+        ...snapshot,
+        prs: snapshot.prs.map((pr) => (pr.nodeId === body.nodeId ? { ...pr, draft: toDraft } : pr)),
+      };
+      writeSnapshot(snapshot);
+    }
+    send(res, 200, { ok: true });
+  } catch (err) {
+    send(res, 502, { error: err instanceof Error ? err.message : "The write failed." });
+  }
+}
 
 const server = createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);

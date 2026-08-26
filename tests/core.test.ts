@@ -181,62 +181,265 @@ describe("lanes", () => {
 });
 
 describe("buildModel", () => {
-  it("orders the send queue by score, best first", () => {
+  it("orders the release queue on the ladder, best first", () => {
     const model = buildModel(
-      [
-        pr({ number: 1, title: "[ACME-10] low" }),
-        pr({ number: 2, title: "[ACME-20] urgent" }),
-      ],
+      [pr({ number: 1, title: "[ACME-10] low" }), pr({ number: 2, title: "[ACME-20] urgent" })],
       [issue("ACME-10", { priority: 4 }), issue("ACME-20", { priority: 1 })],
+      [],
       NOW,
     );
     expect(model.queue.map((item) => item.pr.number)).toEqual([2, 1]);
   });
 
-  it("credits a PR for unblocking another that still has an open PR", () => {
+  it("names the nearest draft when nothing is cleared", () => {
     const model = buildModel(
-      [pr({ number: 1, title: "[ACME-10] blocker" }), pr({ number: 2, title: "[ACME-20] waiter" })],
-      [issue("ACME-10"), issue("ACME-20", { blockedBy: ["ACME-10"] })],
+      [
+        pr({ number: 1, title: "[ACME-10] conflicting", mergeState: "dirty" }),
+        pr({ number: 2, title: "[ACME-20] two problems", mergeState: "dirty", checks: "failure" }),
+      ],
+      [issue("ACME-10"), issue("ACME-20")],
+      [],
       NOW,
     );
-    const blocker = model.items.find((item) => item.pr.number === 1)!;
-    expect(blocker.unblocks).toEqual(["ACME-20"]);
-    expect(blocker.scoreParts.some((part) => part.label === "Unblocks ACME-20")).toBe(true);
-
-    const waiter = model.items.find((item) => item.pr.number === 2)!;
-    expect(waiter.lane).toBe("held");
+    expect(model.queue).toHaveLength(0);
+    // One shut gate is nearer than two.
+    expect(model.closest?.pr.number).toBe(1);
   });
 
-  it("does not credit unblocking a ticket that has no open PR", () => {
+  it("gives an epic a bay only when it owns more than one open PR", () => {
     const model = buildModel(
-      [pr({ number: 1, title: "[ACME-10] blocker" })],
-      [issue("ACME-10"), issue("ACME-20", { blockedBy: ["ACME-10"] })],
+      [
+        pr({ number: 1, title: "[ACME-11] a" }),
+        pr({ number: 2, title: "[ACME-12] b" }),
+        pr({ number: 3, title: "[ACME-21] lonely" }),
+      ],
+      [
+        issue("ACME-10"),
+        issue("ACME-11", { parentId: "ACME-10" }),
+        issue("ACME-12", { parentId: "ACME-10" }),
+        issue("ACME-20"),
+        issue("ACME-21", { parentId: "ACME-20" }),
+      ],
+      [],
       NOW,
     );
-    expect(model.items[0].unblocks).toEqual([]);
+    expect(model.bays.map((bay) => bay.key)).toEqual(["ACME-10"]);
+    // The one-PR epic costs a row, not a section.
+    expect(model.singles.map((item) => item.pr.number)).toEqual([3]);
   });
 
-  it("keeps an epic's own PR in the epic's group", () => {
+  it("orders bays by epic priority and then id, not by urgency", () => {
     const model = buildModel(
-      [pr({ number: 1, title: "[ACME-288] own" }), pr({ number: 2, title: "[ACME-1384] child" })],
-      [issue("ACME-288"), issue("ACME-1384", { parentId: "ACME-288" })],
+      [
+        pr({ number: 1, title: "[ACME-11] a", mergeState: "dirty" }),
+        pr({ number: 2, title: "[ACME-12] b", mergeState: "dirty" }),
+        pr({ number: 3, title: "[ACME-31] c" }),
+        pr({ number: 4, title: "[ACME-32] d" }),
+      ],
+      [
+        issue("ACME-10", { priority: 4 }),
+        issue("ACME-11", { parentId: "ACME-10" }),
+        issue("ACME-12", { parentId: "ACME-10" }),
+        issue("ACME-30", { priority: 1 }),
+        issue("ACME-31", { parentId: "ACME-30" }),
+        issue("ACME-32", { parentId: "ACME-30" }),
+      ],
+      [],
       NOW,
     );
-    const epic = model.groups.find((group) => group.key === "ACME-288")!;
-    expect(epic.count).toBe(2);
-    expect(model.groups.some((group) => group.key === " no-parent")).toBe(false);
+    // The urgent epic leads even though the low-priority one is the broken one:
+    // the board must not reshuffle as PR states change.
+    expect(model.bays.map((bay) => bay.key)).toEqual(["ACME-30", "ACME-10"]);
+  });
+
+  it("puts an unprioritised epic last rather than mid-scale", () => {
+    const model = buildModel(
+      [
+        pr({ number: 1, title: "[ACME-11] a" }),
+        pr({ number: 2, title: "[ACME-12] b" }),
+        pr({ number: 3, title: "[ACME-31] c" }),
+        pr({ number: 4, title: "[ACME-32] d" }),
+      ],
+      [
+        issue("ACME-10", { priority: 0 }),
+        issue("ACME-11", { parentId: "ACME-10" }),
+        issue("ACME-12", { parentId: "ACME-10" }),
+        issue("ACME-30", { priority: 4 }),
+        issue("ACME-31", { parentId: "ACME-30" }),
+        issue("ACME-32", { parentId: "ACME-30" }),
+      ],
+      [],
+      NOW,
+    );
+    expect(model.bays.map((bay) => bay.key)).toEqual(["ACME-30", "ACME-10"]);
+  });
+
+  it("keeps an epic's own PR inside its bay", () => {
+    const model = buildModel(
+      [pr({ number: 1, title: "[ACME-10] own" }), pr({ number: 2, title: "[ACME-11] child" })],
+      [issue("ACME-10"), issue("ACME-11", { parentId: "ACME-10" })],
+      [],
+      NOW,
+    );
+    expect(model.bays[0].count).toBe(2);
+    expect(model.singles).toHaveLength(0);
   });
 
   it("keeps one ticket's PRs together across repositories", () => {
     const model = buildModel(
       [
-        pr({ number: 1, title: "[ACME-1115] infra", repo: "infra" }),
-        pr({ number: 2, title: "[ACME-1115] fetcher", repo: "s3fetcher" }),
+        pr({ number: 1, title: "[ACME-11] infra", repo: "infra" }),
+        pr({ number: 2, title: "[ACME-11] fetcher", repo: "s3fetcher" }),
+        pr({ number: 3, title: "[ACME-12] other" }),
       ],
-      [issue("ACME-1115")],
+      [
+        issue("ACME-10"),
+        issue("ACME-11", { parentId: "ACME-10" }),
+        issue("ACME-12", { parentId: "ACME-10" }),
+      ],
+      [],
       NOW,
     );
-    expect(model.groups[0].tickets).toHaveLength(1);
-    expect(model.groups[0].repos).toBe(2);
+    const ticket = model.bays[0].tickets.find((node) => node.key === "ACME-11")!;
+    expect(ticket.items).toHaveLength(2);
+    expect(model.bays[0].repos).toBe(3);
+  });
+
+  it("separates PRs with no ticket from the singles ledger", () => {
+    const model = buildModel(
+      [
+        pr({ number: 1, title: "Add a skill", headRef: "add-a-skill" }),
+        pr({ number: 2, title: "[ACME-99] real work" }),
+      ],
+      [issue("ACME-99")],
+      [],
+      NOW,
+    );
+    expect(model.noTicket.map((item) => item.pr.number)).toEqual([1]);
+    expect(model.singles.map((item) => item.pr.number)).toEqual([2]);
+  });
+
+  describe("the spine", () => {
+    it("shows done cells from the rollup and one cell per open PR", () => {
+      const model = buildModel(
+        [
+          pr({ number: 1, title: "[ACME-11] cleared" }),
+          pr({ number: 2, title: "[ACME-12] broken", mergeState: "dirty" }),
+          pr({ number: 3, title: "[ACME-13] waiting", draft: false }),
+        ],
+        [
+          issue("ACME-10"),
+          issue("ACME-11", { parentId: "ACME-10" }),
+          issue("ACME-12", { parentId: "ACME-10" }),
+          issue("ACME-13", { parentId: "ACME-10" }),
+        ],
+        [{ parentId: "ACME-10", done: 2, canceled: 1, started: 3, todo: 0, backlog: 0, live: 5 }],
+        NOW,
+      );
+      expect(model.bays[0].spine).toEqual(["done", "done", "cleared", "needs", "waiting"]);
+    });
+
+    it("claims no progress without the rollup", () => {
+      const model = buildModel(
+        [pr({ number: 1, title: "[ACME-11] a" }), pr({ number: 2, title: "[ACME-12] b" })],
+        [issue("ACME-10"), issue("ACME-11", { parentId: "ACME-10" }), issue("ACME-12", { parentId: "ACME-10" })],
+        [],
+        NOW,
+      );
+      expect(model.bays[0].spine).not.toContain("done");
+      expect(model.bays[0].rollup).toBeUndefined();
+    });
+
+    it("marks a dependency-blocked PR apart from a broken one", () => {
+      const model = buildModel(
+        [pr({ number: 1, title: "[ACME-11] blocker" }), pr({ number: 2, title: "[ACME-12] waiter" })],
+        [
+          issue("ACME-10"),
+          issue("ACME-11", { parentId: "ACME-10" }),
+          issue("ACME-12", { parentId: "ACME-10", blockedBy: ["ACME-11"] }),
+        ],
+        [],
+        NOW,
+      );
+      expect(model.bays[0].spine).toEqual(["cleared", "blocked"]);
+    });
+  });
+
+  describe("the next move", () => {
+    const bay = (prs: PullRequest[], issues: LinearIssue[]) =>
+      buildModel(prs, issues, [], NOW).bays[0].move;
+
+    it("prefers merging something approved, and says what it unblocks", () => {
+      const move = bay(
+        [
+          pr({ number: 1, title: "[ACME-11] approved", draft: false, approvals: 1 }),
+          pr({ number: 2, title: "[ACME-12] waiter" }),
+        ],
+        [
+          issue("ACME-10"),
+          issue("ACME-11", { parentId: "ACME-10" }),
+          issue("ACME-12", { parentId: "ACME-10", blockedBy: ["ACME-11"] }),
+        ],
+      );
+      expect(move.kind).toBe("merge");
+      expect(move.text).toBe("merge ACME-11 (approved; unblocks ACME-12)");
+    });
+
+    it("otherwise releases the best cleared draft", () => {
+      const move = bay(
+        [
+          pr({ number: 1, title: "[ACME-11] cleared", }),
+          pr({ number: 2, title: "[ACME-12] broken", mergeState: "dirty" }),
+        ],
+        [issue("ACME-10"), issue("ACME-11", { parentId: "ACME-10" }), issue("ACME-12", { parentId: "ACME-10" })],
+      );
+      expect(move.kind).toBe("release");
+      expect(move.text).toBe("release ACME-11");
+    });
+
+    it("otherwise names the break and its reason", () => {
+      const move = bay(
+        [
+          pr({ number: 1, title: "[ACME-11] broken", checks: "failure", failedChecks: ["go-test"] }),
+          pr({ number: 2, title: "[ACME-12] out", draft: false }),
+        ],
+        [issue("ACME-10"), issue("ACME-11", { parentId: "ACME-10" }), issue("ACME-12", { parentId: "ACME-10" })],
+      );
+      expect(move.kind).toBe("fix");
+      expect(move.text).toBe("ACME-11 — go-test failed");
+    });
+
+    it("says plainly when nothing is yours to do", () => {
+      const move = bay(
+        [
+          pr({ number: 1, title: "[ACME-11] out", draft: false }),
+          pr({ number: 2, title: "[ACME-12] out", draft: false }),
+        ],
+        [issue("ACME-10"), issue("ACME-11", { parentId: "ACME-10" }), issue("ACME-12", { parentId: "ACME-10" })],
+      );
+      expect(move).toEqual({ kind: "waiting", text: "waiting on reviewers — nothing for you" });
+    });
+  });
+
+  it("sorts rows on the ladder, with a blocked draft below a fixable one", () => {
+    const model = buildModel(
+      [
+        pr({ number: 1, title: "[ACME-11] blocked" }),
+        pr({ number: 2, title: "[ACME-12] broken", mergeState: "dirty" }),
+        pr({ number: 3, title: "[ACME-13] cleared" }),
+        pr({ number: 4, title: "[ACME-14] waiting", draft: false }),
+      ],
+      [
+        issue("ACME-10"),
+        issue("ACME-11", { parentId: "ACME-10", blockedBy: ["ACME-13"] }),
+        issue("ACME-12", { parentId: "ACME-10" }),
+        issue("ACME-13", { parentId: "ACME-10" }),
+        issue("ACME-14", { parentId: "ACME-10" }),
+      ],
+      [],
+      NOW,
+    );
+    const order = model.bays[0].tickets.flatMap((node) => node.items).map((item) => item.pr.number);
+    expect(order).toEqual([3, 2, 4, 1]);
   });
 });

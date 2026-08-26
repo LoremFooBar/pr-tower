@@ -24,15 +24,23 @@ createServer(async (req, res) => {
     for await (const chunk of req) body += chunk;
     const query = JSON.parse(body || "{}").query ?? "";
     if (query.includes("viewer")) return json(res, { data: { viewer: { name: "Tester" } } });
+    if (query.includes("Children")) {
+      return json(res, { data: { issues: { nodes: fixture.children ?? [] } } });
+    }
     return json(res, {
       data: { issues: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: fixture.issues } },
     });
   }
 
   if (path === "/graphql") {
-    return json(res, {
-      data: { markPullRequestReadyForReview: { pullRequest: { number: 1, isDraft: false } } },
-    });
+    let body = "";
+    for await (const chunk of req) body += chunk;
+    const query = JSON.parse(body || "{}").query ?? "";
+    // Answer with the field that was actually asked for, and with the draft
+    // flag that mutation is supposed to leave behind.
+    const toDraft = query.includes("convertPullRequestToDraft");
+    const field = toDraft ? "convertPullRequestToDraft" : "markPullRequestReadyForReview";
+    return json(res, { data: { [field]: { pullRequest: { number: 1, isDraft: toDraft } } } });
   }
 
   if (path === "/user") return json(res, fixture.user);

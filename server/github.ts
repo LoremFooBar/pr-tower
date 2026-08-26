@@ -189,17 +189,20 @@ export async function fetchMyOpenPRs(
   });
 }
 
-// Taking a PR out of draft is a GraphQL-only operation — REST has no way to do
-// it. This is the one write the app makes.
-export async function sendForReview(token: string, nodeId: string): Promise<void> {
+// Moving a PR in or out of draft is GraphQL-only — REST cannot do either. These
+// are the only writes the app makes.
+async function draftMutation(
+  token: string,
+  nodeId: string,
+  field: "markPullRequestReadyForReview" | "convertPullRequestToDraft",
+  expectDraft: boolean,
+): Promise<void> {
   const res = await fetch(GRAPHQL, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       query: `mutation($id: ID!) {
-        markPullRequestReadyForReview(input: { pullRequestId: $id }) {
-          pullRequest { number isDraft }
-        }
+        ${field}(input: { pullRequestId: $id }) { pullRequest { number isDraft } }
       }`,
       variables: { id: nodeId },
     }),
@@ -207,7 +210,19 @@ export async function sendForReview(token: string, nodeId: string): Promise<void
   if (!res.ok) throw new GitHubError(`GitHub returned ${res.status}.`);
   const body = await res.json();
   if (body.errors?.length) throw new GitHubError(body.errors[0].message);
-  if (body.data?.markPullRequestReadyForReview?.pullRequest?.isDraft !== false) {
-    throw new GitHubError("GitHub accepted the request but the PR is still a draft.");
+  if (body.data?.[field]?.pullRequest?.isDraft !== expectDraft) {
+    throw new GitHubError(
+      expectDraft
+        ? "GitHub accepted the request but the PR is still out for review."
+        : "GitHub accepted the request but the PR is still a draft.",
+    );
   }
+}
+
+export function sendForReview(token: string, nodeId: string): Promise<void> {
+  return draftMutation(token, nodeId, "markPullRequestReadyForReview", false);
+}
+
+export function convertToDraft(token: string, nodeId: string): Promise<void> {
+  return draftMutation(token, nodeId, "convertPullRequestToDraft", true);
 }

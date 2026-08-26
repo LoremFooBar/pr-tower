@@ -102,7 +102,7 @@ for (const theme of ["dark", "light"]) {
     await page.getByRole("button", { name: "Connect" }).click();
   }
 
-  await page.waitForSelector(".lane-tab", { timeout: 20000 });
+  await page.waitForSelector(".queue", { timeout: 20000 });
   // Polled from the test side rather than with waitForFunction: the page's CSP
   // allows no injected script, which is the point of it. Scoped to #app because
   // the inlined bundle lives inside <body>, so body.textContent contains the
@@ -119,51 +119,48 @@ for (const theme of ["dark", "light"]) {
   }
   await page.waitForTimeout(400);
 
-  for (const [tab, name] of [
-    ["Ready to send", "send"],
-    ["Held back", "held"],
-    ["Out for review", "flight"],
-    ["Everything", "tree"],
-  ]) {
-    await page.getByRole("tab", { name: new RegExp(tab) }).click();
-    await page.waitForTimeout(250);
-    await page.screenshot({ path: `${out}/${theme}-${name}.png`, fullPage: true });
-  }
+  await page.screenshot({ path: `${out}/${theme}-board.png`, fullPage: true });
 
   if (theme === "dark") {
-    await page.getByRole("tab", { name: /Ready to send/ }).click();
-    await page.waitForTimeout(200);
+    const cleared = async () => (await page.textContent(".queue-title")) ?? "";
+    const before = [await cleared()];
 
-    const lanes = async () =>
-      Promise.all(
-        (await page.locator(".lane-tab").all()).map(async (tab) => (await tab.textContent()).trim()),
-      );
-    const before = await lanes();
-
-    const boxes = page.locator(".check");
-    const pick = Math.min(2, await boxes.count());
-    for (let i = 0; i < pick; i++) await boxes.nth(i).click();
+    // One click, because PRs of a ticket that must land together select as a
+    // pair — clicking a second box would toggle the pair straight back off.
+    await page.locator(".queue-cards .pick").first().click();
+    await page.waitForSelector(".dock", { timeout: 5000 });
+    const selected = Number(/(\d+) selected/.exec((await page.textContent(".dock")) ?? "")?.[1] ?? 0);
+    console.log(`one click selected: ${selected}`);
+    if (selected < 1) problems.push("selecting a cleared card did not open the release bar");
     await page.screenshot({ path: `${out}/${theme}-selected.png`, fullPage: true });
 
-    await page.getByRole("button", { name: /Send \d+ for review/ }).click();
+    await page.getByRole("button", { name: /release \d+ ▸/ }).first().click();
     await page.waitForSelector(".dialog");
     await page.screenshot({ path: `${out}/${theme}-confirm.png` });
 
-    await page.getByRole("button", { name: /^Send \d+$/ }).click();
-    await page.waitForSelector(".result-ok, .result-bad", { timeout: 15000 });
+    await page.locator(".dialog .release").click();
+    await page.waitForSelector(".dialog .ok, .dialog .bad", { timeout: 15000 });
     const outcome = {
       heading: await page.locator(".dialog h2").textContent(),
-      ok: await page.locator(".result-ok").count(),
-      bad: await page.locator(".result-bad").count(),
+      ok: await page.locator(".dialog .ok").count(),
+      bad: await page.locator(".dialog .bad").count(),
     };
     await page.screenshot({ path: `${out}/${theme}-sent.png` });
-    await page.getByRole("button", { name: "Done" }).click();
+    await page.locator(".dialog .release").click();
     await page.waitForTimeout(300);
-    const after = await lanes();
+    const after = [await cleared()];
 
-    console.log("lanes before:", before.join("  |  "));
-    console.log("send result :", outcome.heading, `(ok=${outcome.ok} failed=${outcome.bad})`);
-    console.log("lanes after :", after.join("  |  "));
+    // The ten-second undo must be offered, and must actually re-draft.
+    const undoVisible = await page.locator(".toast-undo").count();
+    console.log("cleared before:", before.join(""));
+    console.log("release result:", outcome.heading, `(ok=${outcome.ok} failed=${outcome.bad})`);
+    console.log("cleared after :", after.join(""));
+    console.log("undo offered  :", undoVisible ? "yes" : "NO");
+    if (!undoVisible) problems.push("no undo was offered after a release");
+
+    await page.locator(".toast-undo").click();
+    await page.waitForTimeout(600);
+    console.log("after undo    :", await cleared());
 
     // The server must have recorded it too, not just the open page.
     const server = await (await fetch(`http://localhost:${APP}/api/data`)).json();

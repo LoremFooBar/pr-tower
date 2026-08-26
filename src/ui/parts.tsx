@@ -1,158 +1,197 @@
-import type { Gate, Item, LinearIssue } from "../core/types";
+import type { Item, LinearIssue } from "../core/types";
 import { stripTicketPrefix } from "../core/link";
 
-export function Rail({ gates }: { gates: Gate[] }) {
-  const clear = gates.every((gate) => gate.open);
-  const title = clear
-    ? "All three gates open — clear to send"
-    : gates.filter((gate) => !gate.open).map((gate) => `${gate.label}: ${gate.reason}`).join(" · ");
+const PRIORITY = ["", "URGENT", "HIGH", "MEDIUM", "LOW"];
+
+export function priorityLabel(issue?: LinearIssue): string {
+  return issue ? (PRIORITY[issue.priority] ?? "") : "";
+}
+
+export function Spine({ cells }: { cells: Item["lane"] extends never ? never : string[] }) {
   return (
-    <span class={`rail${clear ? " clear" : ""}`} title={title} aria-label={title}>
-      {gates.map((gate) => (
-        <i key={gate.name} class={gate.open ? "open" : "shut"} />
+    <span class="spine" aria-hidden="true">
+      {cells.map((cell, index) => (
+        <i key={index} class={cell} />
       ))}
     </span>
   );
 }
 
-export function Ticket({ issue, fallback }: { issue?: LinearIssue; fallback?: string }) {
-  if (issue) {
+/**
+ * CI MG BL — solid when the gate is open, amber when it is shut for something
+ * you can fix, faint when it is pending or waiting on another ticket. On a PR
+ * that is already out for review the column carries review shorthand instead,
+ * because gates have stopped being the question.
+ */
+export function Gates({ item }: { item: Item }) {
+  const { pr, gates } = item;
+
+  if (!pr.draft) {
+    const changes = pr.changesRequested > 0;
+    const botMissing = pr.bugbot === "none" && pr.hasCI;
     return (
-      <a class="ticket" href={issue.url} target="_blank" rel="noreferrer" title={issue.title}>
-        {issue.id}
-      </a>
+      <span class="gates" title={reviewTitle(item)}>
+        <span class={pr.approvals > 0 ? "good" : undefined}>✓{pr.approvals}</span>{" "}
+        {changes ? <span class="bad">±{pr.changesRequested}</span> : null}
+        {!changes ? (
+          <span class={botMissing ? "shut" : pr.bugbot === "failure" ? "bad" : "good"}>
+            {botMissing ? "bot–" : pr.bugbot === "failure" ? "bot✗" : "bot✓"}
+          </span>
+        ) : null}
+      </span>
     );
   }
-  if (fallback) return <span class="ticket">{fallback}</span>;
-  return <span class="pill">no ticket</span>;
-}
 
-export function State({ issue }: { issue?: LinearIssue }) {
-  if (!issue) return null;
+  const letters: Record<string, string> = { ci: "CI", merge: "MG", path: "BL" };
   return (
-    <span class={`pill pill--${issue.stateType === "started" ? "started" : "state"}`}>
-      {issue.stateName}
+    <span class="gates" title={gates.map((gate) => `${gate.label}: ${gate.reason}`).join(" · ")}>
+      {gates.map((gate) => (
+        <span
+          key={gate.name}
+          class={gate.open ? "open" : gate.name === "path" ? "wait" : "shut"}
+        >
+          {letters[gate.name]}{" "}
+        </span>
+      ))}
     </span>
   );
 }
 
-const SIGNAL_TONE: Record<string, string> = {
-  conflict: "stop",
-  red: "stop",
-  blocked: "stop",
-  no_bot: "hold",
-  drift: "hold",
-  checks_running: "",
-  behind: "",
-  idle: "",
-  merge: "go",
-};
+function reviewTitle(item: Item): string {
+  const bits = [`${item.pr.approvals} approval${item.pr.approvals === 1 ? "" : "s"}`];
+  if (item.pr.changesRequested > 0) bits.push(`${item.pr.changesRequested} change request`);
+  if (item.pr.bugbot === "none" && item.pr.hasCI) bits.push("review bot never ran on this commit");
+  return bits.join(" · ");
+}
 
-export function Signals({ item, hide }: { item: Item; hide?: string[] }) {
-  const shown = hide ? item.signals.filter((signal) => !hide.includes(signal.kind)) : item.signals;
-  return (
-    <>
-      {shown.map((signal) => {
-        const tone = SIGNAL_TONE[signal.kind];
-        return (
-          <span
-            key={signal.kind + signal.label}
-            class={`pill${tone ? ` pill--${tone}` : ""}`}
-            title={signal.detail}
-          >
-            {signal.label}
-          </span>
-        );
-      })}
-    </>
-  );
+/** The single most useful thing to say about this row's state. */
+export function note(item: Item): { text: string; tone: string } {
+  const shut = item.gates.find((gate) => !gate.open);
+  // The blocking ticket id keeps its capitals; lowercasing it makes it unreadable.
+  if (shut && shut.name === "path") return { text: shut.reason.replace(/^Waiting/, "waiting"), tone: "" };
+  if (shut) return { text: shut.reason.toLowerCase(), tone: "hold" };
+  if (item.lane === "merge") return { text: "approved · mergeable", tone: "steel" };
+  if (item.lane === "flight") {
+    if (item.pr.changesRequested > 0) return { text: "changes requested", tone: "fault" };
+    if (item.pr.bugbot === "none" && item.pr.hasCI) return { text: "in review · bot never ran", tone: "hold" };
+    return { text: "in review", tone: "steel" };
+  }
+  if (item.pr.mergeState === "behind") return { text: "cleared · behind base", tone: "" };
+  return { text: "cleared", tone: "" };
 }
 
 interface RowProps {
   item: Item;
-  rank?: number;
-  selected?: boolean;
-  onToggle?: () => void;
-  onSend?: () => void;
-  sending?: boolean;
-  /** Why this row is where it is — the ranking parts, or the shut gate. */
-  explain?: "score" | "gate" | "none";
-  hideTicket?: boolean;
+  /** Shown only on rows that can actually be released. */
+  picked?: boolean;
+  onPick?(): void;
+  onRelease?(): void;
+  busy?: boolean;
+  /** Bracket glyph for PRs of one ticket that have to land together. */
+  bracket?: "top" | "bottom";
+  /** Names the parent epic on a ledger row, where there is no bay header. */
+  eyebrow?: string;
+  expanded?: boolean;
+  onToggle?(): void;
 }
 
 export function Row({
   item,
-  rank,
-  selected,
+  picked,
+  onPick,
+  onRelease,
+  busy,
+  bracket,
+  eyebrow,
+  expanded,
   onToggle,
-  onSend,
-  sending,
-  explain = "none",
-  hideTicket,
 }: RowProps) {
-  const { pr, issue, gates } = item;
-  const shut = gates.find((gate) => !gate.open);
-  const title = issue || hideTicket ? stripTicketPrefix(pr.title) : pr.title;
-  // Whatever the row explains in prose below, it does not also repeat as a pill.
-  const hide =
-    explain === "gate"
-      ? ["conflict", "red", "blocked", "checks_running"]
-      : explain === "score"
-        ? ["idle"]
-        : undefined;
+  const { pr, issue } = item;
+  const state = note(item);
+  const releasable = item.lane === "send";
 
   return (
-    <div class={`row${item.ready ? " row--clear" : ""}${selected ? " row--selected" : ""}`}>
-      {onToggle && (
-        <input
-          type="checkbox"
-          class="check"
-          checked={selected}
-          onChange={onToggle}
-          aria-label={`Select ${pr.repo} #${pr.number}`}
-        />
-      )}
-      {rank !== undefined && <span class="row-rank">{rank}</span>}
-      <Rail gates={gates} />
+    <div class={`row${bracket ? ` row--pair row--pair-${bracket}` : ""}`} title={bracket ? "Lands together with the other PR on this ticket" : undefined}>
+      <span class="row-gutter">
+        {onPick && releasable ? (
+          <input
+            type="checkbox"
+            class="pick"
+            checked={picked}
+            onChange={onPick}
+            aria-label={`Select ${pr.repo} #${pr.number}`}
+          />
+        ) : null}
+      </span>
 
-      <div class="row-body">
-        <a class="row-title" href={pr.url} target="_blank" rel="noreferrer">
-          {title}
+      <Gates item={item} />
+
+      {issue ? (
+        <a class="row-ticket" href={issue.url} target="_blank" rel="noreferrer" title={issue.title}>
+          {issue.id}
         </a>
-
-        <div class="row-meta">
-          <span class="repo">
-            <b>{pr.repo}</b> #{pr.number}
-          </span>
-          {!hideTicket && <Ticket issue={issue} />}
-          {!hideTicket && <State issue={issue} />}
-          <Signals item={item} hide={hide} />
-        </div>
-
-        {explain === "gate" && shut && (
-          <p class="row-why">
-            <b>{shut.label} gate:</b> {shut.reason}.
-          </p>
-        )}
-
-        {explain === "score" && (
-          <div class="reasons">
-            {item.scoreParts.map((part, index) => (
-              <span key={part.label} class={`reason${index === 0 ? " reason--lead" : ""}`}>
-                {part.label}
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {onSend && (
-        <div class="row-side">
-          <button class="send-btn" onClick={onSend} disabled={sending || !item.ready}>
-            {sending ? "Sending…" : "Send for review"}
-          </button>
-        </div>
+      ) : (
+        <span class="row-ticket">—</span>
       )}
+
+      <span class="row-repo">
+        {pr.repo} <span class="data">#{pr.number}</span>
+      </span>
+
+      <a
+        class="row-title"
+        href={pr.url}
+        target="_blank"
+        rel="noreferrer"
+        onClick={(e) => {
+          if (e.metaKey || e.ctrlKey) return;
+          e.preventDefault();
+          onToggle?.();
+        }}
+        title={pr.title}
+      >
+        {stripTicketPrefix(pr.title)}
+      </a>
+
+      <span class={`row-note${state.tone ? ` row-note--${state.tone}` : ""}`}>
+        {eyebrow ? <span class="row-eyebrow">↳{eyebrow} </span> : null}
+        {state.text}
+      </span>
+
+      <span class="row-age">{item.idleDays}d</span>
+
+      <span class="row-act">
+        {releasable && onRelease ? (
+          <button class="release" onClick={onRelease} disabled={busy}>
+            {busy ? "sending" : "release ▸"}
+          </button>
+        ) : null}
+      </span>
+
+      {expanded ? (
+        <span class="detail">
+          {item.scoreParts.map((part) => (
+            <span key={part.label}>
+              {part.label.toLowerCase()} +{part.points}
+            </span>
+          ))}
+          <span>score {item.score}</span>
+          {pr.additions !== undefined ? (
+            <span>
+              +{pr.additions} −{pr.deletions} · {pr.changedFiles} files
+            </span>
+          ) : null}
+          {pr.headRef ? <span>{pr.headRef}</span> : null}
+          <a href={pr.url} target="_blank" rel="noreferrer">
+            github ↗
+          </a>
+          {issue ? (
+            <a href={issue.url} target="_blank" rel="noreferrer">
+              linear ↗
+            </a>
+          ) : null}
+        </span>
+      ) : null}
     </div>
   );
 }
