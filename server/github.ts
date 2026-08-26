@@ -1,7 +1,9 @@
-import type { BugbotState, CheckStatus, GitHubUser, PullRequest } from "./types";
+import type { BugbotState, CheckStatus, GitHubUser, PullRequest } from "../src/core/types";
 
-const REST = "https://api.github.com";
-const GRAPHQL = "https://api.github.com/graphql";
+// Overridable so the end-to-end test can point the real server at a local
+// stand-in for GitHub instead of reaching the internet.
+const REST = process.env.GITHUB_API ?? "https://api.github.com";
+const GRAPHQL = `${REST}/graphql`;
 
 // How many PRs are enriched at once. Each one costs four REST calls, so this
 // keeps a 30-PR refresh well inside the 5000/hour limit while staying quick.

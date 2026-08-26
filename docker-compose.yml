@@ -1,0 +1,21 @@
+services:
+  pr-tower:
+    build: .
+    image: pr-tower
+    container_name: pr-tower
+    restart: unless-stopped
+    # Bound to the loopback interface: the app has no login of its own, so it
+    # must not be reachable from anything but this machine.
+    ports:
+      - "127.0.0.1:5178:5178"
+    volumes:
+      - pr-tower-data:/data
+    # Optional. Set these to pin the credentials from outside; leave them out and
+    # the Keys screen writes them into the volume instead.
+    # environment:
+    #   GITHUB_TOKEN: ghp_...
+    #   LINEAR_KEY: lin_api_...
+    #   GITHUB_ORG: acme
+
+volumes:
+  pr-tower-data:

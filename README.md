@@ -1,16 +1,20 @@
 # PR Tower
 
-One HTML file that ranks your open pull requests and sends the ready ones out
-for review.
+Ranks your open pull requests and sends the ready ones out for review.
 
-Open `dist/index.html` in a browser. There is no server, no container, and no
-install — the page talks straight to GitHub and Linear from your browser, and
-your keys never leave it.
+Runs as one small container. Your GitHub and Linear tokens stay inside it — the
+browser never receives them, and every call to GitHub and Linear is made
+server-side.
 
 ```bash
-npm install && npm run build
-open dist/index.html          # macOS
+docker compose up -d --build
+open http://localhost:5178
 ```
+
+Then paste the two keys once. They are written to a Docker volume, readable only
+by the container user, and never sent back to the page.
+
+It restarts with Docker, so there is nothing to run by hand afterwards.
 
 ## What it does
 
@@ -69,8 +73,20 @@ tokens cannot use the Search Issues API, so they will not work.
 without it you still see every PR, but no ticket, priority, or grouping, and the
 Path gate never shuts.
 
-Both live in this browser's `localStorage` and are sent only to
-`api.github.com` and `api.linear.app`. Keys clears them.
+Enter both on the Keys screen, or pin them from outside by uncommenting the
+`environment:` block in `docker-compose.yml`. A token supplied that way is used
+but never written to the volume, so it stays wherever you put it.
+
+### Why a container and not a file
+
+The first version of this was a single HTML file opened with `file://`. That
+worked, but every `file://` page in Chromium shares one `localStorage`
+partition — so any other local HTML file you opened could read the tokens. The
+container removes that: the browser holds no credential at all.
+
+The server binds to `127.0.0.1` only, refuses cross-origin requests, and
+requires `Content-Type: application/json` on writes, so a page you happen to be
+visiting cannot drive it.
 
 ## How a PR is matched to a ticket
 
@@ -92,18 +108,21 @@ A PR with no ticket is shown in its own group rather than hidden.
 ## Development
 
 ```bash
-npm run dev       # Vite dev server
-npm test          # unit tests for the join, gates, ranking, and grouping
-npm run build     # single self-contained file → dist/index.html
-npm run verify    # loads the built file from file:// and drives it end to end
+npm run up        # docker compose up -d --build
+npm run logs      # follow the container
+npm run down      # stop it
+npm test          # unit tests: the join, gates, ranking, grouping, token storage
+npm run build     # client bundle + server bundle into dist/
+npm run verify    # full stack, end to end, in a real browser
 npm run fonts     # re-embed the typefaces into src/fonts.css
 ```
 
-`npm run verify` opens the built file in headless Chromium with a canned GitHub
-and Linear fixture, screenshots every view into `shots/`, and completes a send
-to check the write path. Point `FIXTURE` at another capture to use your own
-data. It is the only way to test that the file works with no server, since that
-is exactly how it is used.
+`npm run verify` is the one that matters. It starts a stand-in for GitHub and
+Linear, starts the real server against it, then drives the real page in headless
+Chromium: through the setup screen, every lane, and a completed send. It checks
+that the send reached the server and that no response ever contains a token.
+Screenshots land in `shots/`. Point `FIXTURE` at another capture to use your own
+data.
 
 Fonts are embedded as data URIs, so the page makes no external request and looks
 the same offline. Chivo and Chivo Mono are OFL licensed.

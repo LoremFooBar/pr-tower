@@ -6,11 +6,15 @@
   "description": "A single-file web app that ranks your open PRs and sends the ready ones for review.",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node tools/build-server.mjs",
     "test": "jest",
     "preview": "vite preview",
-    "verify": "node tools/shoot.mjs",
-    "fonts": "node tools/fetch-fonts.mjs"
+    "verify": "node tools/verify.mjs",
+    "fonts": "node tools/fetch-fonts.mjs",
+    "start": "node dist/server.js",
+    "up": "docker compose up -d --build",
+    "down": "docker compose down",
+    "logs": "docker compose logs -f"
   },
   "dependencies": {
     "preact": "^10.27.2"
@@ -24,6 +28,7 @@
     "jest-environment-jsdom": "^30.4.1",
     "playwright": "^1.62.1",
     "typescript": "^5.9.3",
-    "vite": "^6.4.3"
+    "vite": "^6.4.3",
+    "esbuild": "^0.25.0"
   }
 }

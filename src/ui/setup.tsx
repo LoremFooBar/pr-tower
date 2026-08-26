@@ -1,19 +1,20 @@
 import { useState } from "preact/hooks";
-import type { Config } from "../core/store";
+import type { Status } from "../core/api";
 
 interface SetupProps {
-  initial: Config;
-  onSave(config: Config): Promise<void>;
+  status: Status;
+  onSave(input: { githubToken?: string; linearKey?: string; org: string }): Promise<void>;
   error?: string;
   busy?: boolean;
   onCancel?(): void;
 }
 
-export function Setup({ initial, onSave, error, busy, onCancel }: SetupProps) {
-  const [draft, setDraft] = useState<Config>(initial);
+export function Setup({ status, onSave, error, busy, onCancel }: SetupProps) {
+  const [githubToken, setGithubToken] = useState("");
+  const [linearKey, setLinearKey] = useState("");
+  const [org, setOrg] = useState(status.org);
 
-  const set = <K extends keyof Config>(key: K, value: Config[K]) =>
-    setDraft((current) => ({ ...current, [key]: value }));
+  const first = !status.githubToken;
 
   return (
     <div class="setup">
@@ -25,10 +26,10 @@ export function Setup({ initial, onSave, error, busy, onCancel }: SetupProps) {
         </span>
         PR Tower
       </span>
-      <h1>Two keys and you're in.</h1>
+      <h1>{first ? "Two keys and you're in." : "Keys"}</h1>
       <p>
-        Both are stored in this browser only, and every request goes straight from this page
-        to GitHub and Linear. Nothing passes through a server.
+        These are held by the container, not by this page. The browser never
+        receives them, and every call to GitHub and Linear is made server-side.
       </p>
 
       {error && <p class="notice">{error}</p>}
@@ -36,30 +37,46 @@ export function Setup({ initial, onSave, error, busy, onCancel }: SetupProps) {
       <div class="field">
         <label for="gh">GitHub token</label>
         <p class="hint">
-          A classic personal access token with the <b>repo</b> scope. Fine-grained tokens
-          cannot search issues, so they will not work here.
+          {status.pinned.githubToken ? (
+            <>Set by the environment in <b>docker-compose.yml</b>. Change it there.</>
+          ) : (
+            <>
+              A classic personal access token with the <b>repo</b> scope. Fine-grained
+              tokens cannot search issues, so they will not work.
+              {status.githubToken && " A token is saved — type to replace it."}
+            </>
+          )}
         </p>
         <input
           id="gh"
           type="password"
-          placeholder="ghp_…"
-          value={draft.githubToken}
-          onInput={(e) => set("githubToken", (e.target as HTMLInputElement).value)}
+          placeholder={status.githubToken ? "•••••••• saved" : "ghp_…"}
+          value={githubToken}
+          disabled={status.pinned.githubToken}
+          onInput={(e) => setGithubToken((e.target as HTMLInputElement).value)}
         />
       </div>
 
       <div class="field">
         <label for="ln">Linear key</label>
         <p class="hint">
-          A personal API key from Linear, under Settings, Security &amp; access. Without it
-          you still get every PR, but no ticket, priority, or grouping.
+          {status.pinned.linearKey ? (
+            <>Set by the environment in <b>docker-compose.yml</b>. Change it there.</>
+          ) : (
+            <>
+              A personal API key from Linear, under Settings, Security &amp; access.
+              Without it you still get every PR, but no ticket, priority, or grouping.
+              {status.linearKey && " A key is saved — type to replace it."}
+            </>
+          )}
         </p>
         <input
           id="ln"
           type="password"
-          placeholder="lin_api_…"
-          value={draft.linearKey}
-          onInput={(e) => set("linearKey", (e.target as HTMLInputElement).value)}
+          placeholder={status.linearKey ? "•••••••• saved" : "lin_api_…"}
+          value={linearKey}
+          disabled={status.pinned.linearKey}
+          onInput={(e) => setLinearKey((e.target as HTMLInputElement).value)}
         />
       </div>
 
@@ -70,8 +87,8 @@ export function Setup({ initial, onSave, error, busy, onCancel }: SetupProps) {
           id="org"
           type="text"
           placeholder="acme"
-          value={draft.org}
-          onInput={(e) => set("org", (e.target as HTMLInputElement).value)}
+          value={org}
+          onInput={(e) => setOrg((e.target as HTMLInputElement).value)}
         />
       </div>
 
@@ -83,10 +100,16 @@ export function Setup({ initial, onSave, error, busy, onCancel }: SetupProps) {
         )}
         <button
           class="send-btn"
-          onClick={() => onSave({ ...draft, org: draft.org.trim() })}
-          disabled={busy || !draft.githubToken.trim()}
+          onClick={() =>
+            onSave({
+              ...(githubToken.trim() ? { githubToken: githubToken.trim() } : {}),
+              ...(linearKey.trim() ? { linearKey: linearKey.trim() } : {}),
+              org: org.trim(),
+            })
+          }
+          disabled={busy || (first && !githubToken.trim())}
         >
-          {busy ? "Checking…" : "Connect"}
+          {busy ? "Checking…" : first ? "Connect" : "Save"}
         </button>
       </div>
     </div>

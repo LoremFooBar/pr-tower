@@ -1,20 +1,17 @@
 import { render } from "preact";
 import { useCallback, useEffect, useMemo, useState } from "preact/hooks";
 import { buildModel } from "./core/model";
-import { fetchMyOpenPRs, sendForReview, validateToken } from "./core/github";
-import { fetchAssignedIssues, validateKey } from "./core/linear";
 import {
-  clearAll,
-  EMPTY_CONFIG,
-  loadConfig,
-  loadSnapshot,
+  getData,
+  getStatus,
   saveConfig,
-  saveSnapshot,
-  timeAgo,
-  type Config,
-  type Snapshot,
-} from "./core/store";
-import type { Item, LinearIssue, PullRequest } from "./core/types";
+  sendForReview,
+  type ConfigInput,
+  type Data,
+  type Status,
+} from "./core/api";
+import { timeAgo } from "./core/store";
+import type { Item } from "./core/types";
 import { Setup } from "./ui/setup";
 import { Flight, Held, Queue, Tree } from "./ui/views";
 import { stripTicketPrefix } from "./core/link";
@@ -124,17 +121,15 @@ function ConfirmSend({
 }
 
 function App() {
-  const [config, setConfig] = useState<Config>(loadConfig);
-  const [showSetup, setShowSetup] = useState(!loadConfig().githubToken);
+  const [status, setStatus] = useState<Status | null>(null);
+  const [showSetup, setShowSetup] = useState(false);
   const [setupError, setSetupError] = useState("");
   const [setupBusy, setSetupBusy] = useState(false);
 
-  const [snapshot, setSnapshot] = useState<Snapshot | null>(loadSnapshot);
+  const [snapshot, setSnapshot] = useState<Data | null>(null);
   const [view, setView] = useState<View>("send");
-  const [loading, setLoading] = useState(false);
-  const [progress, setProgress] = useState(0);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [linearError, setLinearError] = useState("");
 
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [pending, setPending] = useState<Item[] | null>(null);
@@ -147,58 +142,40 @@ function App() {
     [snapshot],
   );
 
-  const refresh = useCallback(
-    async (next: Config) => {
-      if (!next.githubToken) return;
-      setLoading(true);
-      setError("");
-      setLinearError("");
-      setProgress(0);
-      try {
-        const user = await validateToken(next.githubToken);
-        // Linear is fetched alongside but must not be able to fail the refresh:
-        // the PR half is still worth showing on its own.
-        const issuesPromise: Promise<LinearIssue[]> = next.linearKey
-          ? fetchAssignedIssues(next.linearKey).catch((err) => {
-              setLinearError(err instanceof Error ? err.message : "Linear failed.");
-              return [];
-            })
-          : Promise.resolve([]);
-
-        const prs: PullRequest[] = await fetchMyOpenPRs(
-          next.githubToken,
-          user.login,
-          next.org,
-          (done, total) => setProgress(total ? done / total : 0),
-        );
-        const issues = await issuesPromise;
-        const fresh: Snapshot = { prs, issues, at: Date.now() };
-        setSnapshot(fresh);
-        saveSnapshot(fresh);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Could not load your PRs.");
-      } finally {
-        setLoading(false);
-      }
-    },
-    [],
-  );
-
-  useEffect(() => {
-    if (config.githubToken && !showSetup) refresh(config);
-    // Runs once on load; later refreshes are explicit.
+  const refresh = useCallback(async (force: boolean) => {
+    setLoading(true);
+    setError("");
+    try {
+      setSnapshot(await getData(force));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not load your PRs.");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  async function connect(next: Config) {
+  useEffect(() => {
+    getStatus()
+      .then((current) => {
+        setStatus(current);
+        if (current.githubToken) return refresh(false);
+        setShowSetup(true);
+        setLoading(false);
+      })
+      .catch(() => {
+        setError("The PR Tower backend is not answering.");
+        setLoading(false);
+      });
+  }, []);
+
+  async function connect(input: ConfigInput) {
     setSetupBusy(true);
     setSetupError("");
     try {
-      await validateToken(next.githubToken);
-      if (next.linearKey) await validateKey(next.linearKey);
-      saveConfig(next);
-      setConfig(next);
+      await saveConfig(input);
+      setStatus(await getStatus());
       setShowSetup(false);
-      refresh(next);
+      refresh(true);
     } catch (err) {
       setSetupError(err instanceof Error ? err.message : "Those credentials were rejected.");
     } finally {
@@ -228,7 +205,7 @@ function App() {
     const done: SendResult[] = [];
     for (const item of items) {
       try {
-        await sendForReview(config.githubToken, item.pr.nodeId);
+        await sendForReview(item.pr.nodeId);
         done.push({ item });
       } catch (err) {
         done.push({ item, error: err instanceof Error ? err.message : "Failed." });
@@ -238,27 +215,26 @@ function App() {
     setSending(false);
     setSendingIds(new Set());
 
-    // Reflect the ones that went out without waiting for a full refresh.
+    // Reflect the ones that went out without waiting for a full refresh. The
+    // server does the same to its own snapshot.
     const sent = new Set(done.filter((result) => !result.error).map((result) => result.item.pr.id));
     if (sent.size > 0 && snapshot) {
-      const updated: Snapshot = {
+      setSnapshot({
         ...snapshot,
         prs: snapshot.prs.map((pr) => (sent.has(pr.id) ? { ...pr, draft: false } : pr)),
-      };
-      setSnapshot(updated);
-      saveSnapshot(updated);
+      });
     }
     setSelected(new Set());
   }
 
-  if (showSetup) {
+  if (showSetup && status) {
     return (
       <Setup
-        initial={config.githubToken ? config : EMPTY_CONFIG}
+        status={status}
         onSave={connect}
         error={setupError}
         busy={setupBusy}
-        onCancel={config.githubToken ? () => setShowSetup(false) : undefined}
+        onCancel={status.githubToken ? () => setShowSetup(false) : undefined}
       />
     );
   }
@@ -276,7 +252,7 @@ function App() {
         <div class="bar-inner">
           <Wordmark />
           <span class="bar-scope">
-            {config.org || "all orgs"}
+            {status?.org || "all orgs"}
             {snapshot ? ` · updated ${timeAgo(snapshot.at)}` : ""}
           </span>
           <span class="bar-spacer" />
@@ -285,14 +261,14 @@ function App() {
               <b>{merge.length}</b> to merge
             </span>
           )}
-          <button class="icon-btn" onClick={() => refresh(config)} disabled={loading}>
-            {loading ? `Loading ${Math.round(progress * 100)}%` : "Refresh"}
+          <button class="icon-btn" onClick={() => refresh(true)} disabled={loading}>
+            {loading ? "Loading…" : "Refresh"}
           </button>
           <button class="icon-btn" onClick={() => setShowSetup(true)}>
             Keys
           </button>
         </div>
-        {loading && <div class="progress" style={`width:${Math.round(progress * 100)}%`} />}
+
       </header>
 
       <nav class="lanes">
@@ -314,11 +290,6 @@ function App() {
 
       <main class="page">
         {error && <p class="notice">{error}</p>}
-        {linearError && (
-          <p class="notice">
-            Linear: {linearError} Tickets, priority, and grouping are missing until this is fixed.
-          </p>
-        )}
         {!snapshot && loading && <div class="empty">Loading your pull requests…</div>}
 
         {view === "send" && (
@@ -367,5 +338,3 @@ function App() {
 
 const root = document.getElementById("app");
 if (root) render(<App />, root);
-
-export { clearAll };

@@ -1,6 +1,6 @@
-import type { LinearIssue, LinearStateType } from "./types";
+import type { LinearIssue, LinearStateType } from "../src/core/types";
 
-const API = "https://api.linear.app/graphql";
+const API = process.env.LINEAR_API ?? "https://api.linear.app/graphql";
 const PAGE_SIZE = 100;
 const MAX_PAGES = 6;
 

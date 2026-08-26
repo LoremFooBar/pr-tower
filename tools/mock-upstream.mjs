@@ -1,0 +1,54 @@
+// Stands in for GitHub and Linear so the real server can be driven end to end
+// without credentials or network. Serves the same fixture the browser test uses.
+import { createServer } from "node:http";
+import { readFileSync } from "node:fs";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const here = dirname(fileURLToPath(import.meta.url));
+const fixture = JSON.parse(
+  readFileSync(process.env.FIXTURE ?? resolve(here, "fixture.demo.json"), "utf8"),
+);
+
+const json = (res, body) => {
+  res.writeHead(200, { "content-type": "application/json" });
+  res.end(JSON.stringify(body));
+};
+
+createServer(async (req, res) => {
+  const url = new URL(req.url, "http://localhost");
+  const path = url.pathname;
+
+  if (path === "/linear") {
+    let body = "";
+    for await (const chunk of req) body += chunk;
+    const query = JSON.parse(body || "{}").query ?? "";
+    if (query.includes("viewer")) return json(res, { data: { viewer: { name: "Tester" } } });
+    return json(res, {
+      data: { issues: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: fixture.issues } },
+    });
+  }
+
+  if (path === "/graphql") {
+    return json(res, {
+      data: { markPullRequestReadyForReview: { pullRequest: { number: 1, isDraft: false } } },
+    });
+  }
+
+  if (path === "/user") return json(res, fixture.user);
+  if (path === "/search/issues") return json(res, { items: fixture.items });
+
+  let m = path.match(/^\/repos\/([^/]+)\/([^/]+)\/pulls\/(\d+)$/);
+  if (m) return json(res, fixture.details[`${m[1]}/${m[2]}/${m[3]}`] ?? {});
+
+  m = path.match(/^\/repos\/([^/]+)\/([^/]+)\/pulls\/(\d+)\/reviews$/);
+  if (m) return json(res, fixture.reviews[`${m[1]}/${m[2]}/${m[3]}`] ?? []);
+
+  m = path.match(/^\/repos\/[^/]+\/[^/]+\/commits\/([0-9a-f]+)\/status$/);
+  if (m) return json(res, fixture.statuses[m[1]] ?? { state: "success", total_count: 0 });
+
+  m = path.match(/^\/repos\/[^/]+\/[^/]+\/commits\/([0-9a-f]+)\/check-runs$/);
+  if (m) return json(res, fixture.checkruns[m[1]] ?? { total_count: 0, check_runs: [] });
+
+  json(res, {});
+}).listen(5179, () => console.log("mock upstream on 5179"));
