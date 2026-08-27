@@ -1,5 +1,6 @@
 import { defineConfig, type Plugin } from "vite";
-import preact from "@preact/preset-vite";
+import react from "@vitejs/plugin-react-swc";
+import tailwindcss from "@tailwindcss/vite";
 import { readFileSync, rmSync, existsSync } from "fs";
 import { resolve } from "path";
 
@@ -76,7 +77,10 @@ function inlineEverything(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [preact(), inlineEverything()],
+  plugins: [react(), tailwindcss(), inlineEverything()],
+  resolve: {
+    alias: { "@": resolve(__dirname, "src") },
+  },
   build: {
     target: "es2022",
     cssCodeSplit: false,

@@ -102,92 +102,67 @@ for (const theme of ["dark", "light"]) {
     await page.getByRole("button", { name: "Connect" }).click();
   }
 
-  await page.waitForSelector(".queue", { timeout: 20000 });
-  // Polled from the test side rather than with waitForFunction: the page's CSP
-  // allows no injected script, which is the point of it. Scoped to #app because
-  // the inlined bundle lives inside <body>, so body.textContent contains the
-  // whole program source — including every string this might look for.
-  let loaded = false;
-  for (let i = 0; i < 100 && !loaded; i++) {
-    const seen = (await page.textContent("#app").catch(() => "")) ?? "";
-    loaded = !seen.includes("Loading your pull requests");
-    if (!loaded) await page.waitForTimeout(200);
-  }
-  if (!loaded) {
-    const seen = (await page.textContent("#app").catch((e) => `ERR ${e}`)) ?? "";
-    throw new Error(`[${theme}] never finished loading. len=${seen.length} text=${seen.slice(0, 300).replace(/\s+/g, " ")}`);
-  }
-  await page.waitForTimeout(400);
-
+  // Selectors go through roles and text: shadcn emits utility classes, which are
+  // not a contract anything should be pinned to.
+  const cards = () => page.getByRole("button", { name: /Release for review/ });
+  await cards().first().waitFor({ timeout: 20000 });
+  await page.waitForTimeout(600);
   await page.screenshot({ path: `${out}/${theme}-board.png`, fullPage: true });
 
   if (theme === "dark") {
-    const cleared = async () => (await page.textContent(".queue-title")) ?? "";
-    const before = [await cleared()];
+    const ready = await cards().count();
 
     // One click, because PRs of a ticket that must land together select as a
     // pair — clicking a second box would toggle the pair straight back off.
-    await page.locator(".queue-cards .pick").first().click();
-    await page.waitForSelector(".dock", { timeout: 5000 });
-    const selected = Number(/(\d+) selected/.exec((await page.textContent(".dock")) ?? "")?.[1] ?? 0);
-    console.log(`one click selected: ${selected}`);
-    if (selected < 1) problems.push("selecting a cleared card did not open the release bar");
+    await page.getByRole("checkbox").first().click();
+    const dock = page.getByText(/\d+ selected/);
+    await dock.waitFor({ timeout: 5000 });
+    const selected = Number(/(\d+) selected/.exec((await dock.textContent()) ?? "")?.[1] ?? 0);
+    console.log(`ready to release: ${ready} · one click selected: ${selected}`);
+    if (selected < 1) problems.push("selecting a card did not open the release bar");
     await page.screenshot({ path: `${out}/${theme}-selected.png`, fullPage: true });
 
-    await page.getByRole("button", { name: /release \d+ ▸/ }).first().click();
-    await page.waitForSelector(".dialog");
+    await page.getByRole("button", { name: new RegExp(`^Release ${selected}$`) }).click();
+    const dialog = page.getByRole("dialog");
+    await dialog.waitFor({ timeout: 5000 });
     await page.screenshot({ path: `${out}/${theme}-confirm.png` });
 
-    // A modal owes the keyboard four things; check the two that are observable
-    // from outside: it takes focus, and Escape closes it.
-    const focusInside = await page.evaluate(() =>
-      Boolean(document.activeElement?.closest(".dialog")),
-    ).catch(() => null);
+    // Radix owns this now; check it still holds.
+    const focusInside = await page
+      .evaluate(() => Boolean(document.activeElement?.closest('[role="dialog"]')))
+      .catch(() => null);
     await page.keyboard.press("Escape");
-    await page.waitForTimeout(200);
-    const closed = (await page.locator(".dialog").count()) === 0;
+    await page.waitForTimeout(300);
+    const closed = (await page.getByRole("dialog").count()) === 0;
     console.log(`modal focus trapped: ${focusInside ? "yes" : "NO"} · escape closes: ${closed ? "yes" : "NO"}`);
     if (!closed) problems.push("Escape did not close the release dialog");
+    if (!focusInside) problems.push("the dialog did not take focus");
 
-    // Closing the dialog must leave the selection intact, so the same button is
-    // still there to reopen it.
-    const stillSelected = await page.locator(".dock").count();
-    console.log(`selection survived escape: ${stillSelected ? "yes" : "NO"}`);
+    const stillSelected = await page.getByText(/\d+ selected/).count();
     if (!stillSelected) problems.push("Escape cleared the selection as well as closing the dialog");
 
-    await page.getByRole("button", { name: /release \d+ ▸/ }).first().click();
-    await page.waitForSelector(".dialog");
+    await page.getByRole("button", { name: new RegExp(`^Release ${selected}$`) }).click();
+    await page.getByRole("dialog").waitFor({ timeout: 5000 });
+    await page.getByRole("dialog").getByRole("button", { name: /^Release \d+$/ }).click();
 
-    await page.locator(".dialog .release").click();
-    await page.waitForSelector(".dialog .ok, .dialog .bad", { timeout: 15000 });
-    const outcome = {
-      heading: await page.locator(".dialog h2").textContent(),
-      ok: await page.locator(".dialog .ok").count(),
-      bad: await page.locator(".dialog .bad").count(),
-    };
-    await page.screenshot({ path: `${out}/${theme}-sent.png` });
-    await page.locator(".dialog .release").click();
-    await page.waitForTimeout(300);
-    const after = [await cleared()];
+    const toastText = page.getByText(/Released \d+ PRs? for review/);
+    await toastText.waitFor({ timeout: 15000 });
+    await page.screenshot({ path: `${out}/${theme}-released.png` });
+    console.log(`toast: ${await toastText.textContent()}`);
 
-    // The ten-second undo must be offered, and must actually re-draft.
-    const undoVisible = await page.locator(".toast-undo").count();
-    console.log("cleared before:", before.join(""));
-    console.log("release result:", outcome.heading, `(ok=${outcome.ok} failed=${outcome.bad})`);
-    console.log("cleared after :", after.join(""));
-    console.log("undo offered  :", undoVisible ? "yes" : "NO");
-    if (!undoVisible) problems.push("no undo was offered after a release");
+    const undo = page.getByRole("button", { name: "Undo" });
+    const hasUndo = await undo.count();
+    console.log(`undo offered  : ${hasUndo ? "yes" : "NO"}`);
+    if (!hasUndo) problems.push("no undo was offered after a release");
+    else {
+      await undo.click();
+      await page.waitForTimeout(900);
+      console.log(`ready after undo: ${await cards().count()} (was ${ready})`);
+    }
 
-    await page.locator(".toast-undo").click();
-    await page.waitForTimeout(600);
-    console.log("after undo    :", await cleared());
-
-    // The server must have recorded it too, not just the open page.
     const server = await (await fetch(`http://localhost:${APP}/api/data`)).json();
-    const stillDraft = server.prs.filter((pr) => pr.draft).length;
-    console.log(`server drafts remaining: ${stillDraft}`);
+    console.log(`server drafts remaining: ${server.prs.filter((pr) => pr.draft).length}`);
 
-    // And it must never hand a token back to the browser.
     const status = await (await fetch(`http://localhost:${APP}/api/status`)).text();
     if (/ghp_|lin_api_/.test(status)) problems.push("status leaked a token to the client");
     const html = await (await fetch(`http://localhost:${APP}/`)).text();

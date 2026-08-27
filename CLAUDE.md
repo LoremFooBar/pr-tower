@@ -6,8 +6,8 @@ Guidance for Claude Code when working in this repository.
 
 PR Tower ranks the user's open pull requests and sends the ready ones out for
 review. It ships as a **Docker container**: a small Node server that holds the
-credentials and serves one self-contained HTML page. Preact + TypeScript + Vite
-for the client, plain `node:http` for the server.
+credentials and serves one self-contained HTML page. React 19 + TypeScript +
+Vite + Tailwind 4 + shadcn/ui for the client, plain `node:http` for the server.
 
 It replaced a Chrome extension (`~/repos/PR-TOWER`, itself a fork of
 `~/repos/PR-HUB`). That extension still exists but this is the live line of work.
@@ -42,9 +42,8 @@ Do not move the tokens back to the client.
   widen where the secret lives and outlive the variable meant to control it.
   This was a real bug once — it wrote an ambient `GITHUB_TOKEN` to disk.
   `tests/config.test.ts` covers it.
-- **The page's CSP allows no external anything** and no injected script. That is
-  why the verification harness polls from the test side instead of using
-  `waitForFunction`.
+- **The page's CSP allows no external anything** and no injected script. Tailwind
+  and React are inlined at build time, so this still holds.
 
 ## Build
 
@@ -138,30 +137,27 @@ lands.
 
 ## Design
 
-A **flight progress strip board**. Towers rack paper strips in bays; each PR is a
-strip, each epic is a bay, and releasing a PR is clearing a departure. Hard
-columns, tabular numerals, 2px radius, restrained colour.
+**shadcn/ui, deliberately.** The first two attempts were hand-written CSS — an
+instrument panel, then a flight-strip board — and both were rejected: "design
+still not appealing", then "anything will look better than what we have right
+now". That is three rejections of bespoke visual direction, so the look is now a
+well-executed conventional one rather than a distinctive one. Do not reintroduce
+a custom design system here.
 
-The palette rule is the whole design: **the accent (magenta, `--squawk`) is spent
-only on release affordances.** If there is no magenta on screen, there is nothing
-to release. A "next → merge X" pointer is steel, not magenta, because the merge
-button lives on GitHub — painting it accent would break the rule.
+Components live in `src/components/ui`, added with `npx shadcn@latest add`. They
+are ours to edit, but prefer the default styling: its familiarity is the point.
 
-Two signature elements:
+Two things are held outside the shadcn palette on purpose, in `src/styles.css`:
 
-- **The bay spine** — one cell per sub-issue, read left to right: muted for done,
-  magenta cleared, amber needs-you, steel waiting, hollow blocked. It answers
-  "how much is in flight, what colour is the bottleneck" without reading a row.
-  The done cells require the rollup; without it no copy claims progress.
-- **The gate block** — `CI MG BL`, solid when open, amber when shut for something
-  fixable, faint when pending or blocked. On a PR already out for review the same
-  column carries review shorthand instead (`✓2`, `±1`, `bot–`), because gates
-  have stopped being the question. The old aqua all-clear glow is gone: "all
-  gates open" is now expressed by the release button existing at all.
+- `--ok`, `--warn`, `--wait`, `--done` carry *work state*. A theme change must
+  not silently repaint the meaning of a row.
+- The embedded fonts (Geist, Geist Mono) come from `npm run fonts`, so the page
+  still makes no external request.
 
-Typefaces are **Archivo** (variable, the `wdth` axis drives the racked-label look
-on bay headers) and **Spline Sans Mono** for every identifier and number, both
-embedded as data URIs by `npm run fonts`.
+The one bespoke element that survived is the **bay spine** — one cell per
+sub-issue across a parent task, read left to right: done, ready, needs you, in
+review, blocked. Nothing off the shelf says "how much of this effort is left",
+and the done cells depend on the rollup query.
 
 ## Testing
 
