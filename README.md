@@ -140,5 +140,9 @@ that the send reached the server and that no response ever contains a token.
 Screenshots land in `shots/`. Point `FIXTURE` at another capture to use your own
 data.
 
+Built with React 19, Tailwind 4 and [shadcn/ui](https://ui.shadcn.com). Add a
+component with `npx shadcn@latest add <name>`; it lands in `src/components/ui`
+and is yours to edit.
+
 Fonts are embedded as data URIs, so the page makes no external request and looks
-the same offline. Chivo and Chivo Mono are OFL licensed.
+the same offline. Geist and Geist Mono are OFL licensed.
