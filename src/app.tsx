@@ -16,6 +16,7 @@ import { stripTicketPrefix } from "./core/link";
 import type { Item } from "./core/types";
 import { Setup } from "./ui/setup";
 import { Bay, Ledger, Queue } from "./ui/board";
+import { useModal } from "./ui/modal";
 import "./fonts.css";
 import "./styles.css";
 
@@ -57,9 +58,17 @@ function Confirm({
   onConfirm(): void;
 }) {
   const failed = outcomes?.filter((outcome) => outcome.error) ?? [];
+  const ref = useModal<HTMLDivElement>(() => !busy && onCancel());
   return (
     <div class="scrim" onClick={(e) => e.target === e.currentTarget && !busy && onCancel()}>
-      <div class="dialog" role="dialog" aria-modal="true" aria-label="Release for review">
+      <div
+        class="dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Release for review"
+        ref={ref}
+        tabIndex={-1}
+      >
         {!outcomes ? (
           <>
             <h2>Release {items.length === 1 ? "this PR" : `these ${items.length} PRs`}?</h2>
@@ -153,6 +162,18 @@ function App() {
       setLoading(false);
     }
   }, []);
+
+  // Escape clears a selection, but only when it is the outermost thing open —
+  // inside the dialog it belongs to the dialog, and clearing the selection
+  // underneath would discard what the dialog was about to act on.
+  useEffect(() => {
+    if (pending) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setPicked(new Set());
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [pending]);
 
   useEffect(() => {
     getStatus()

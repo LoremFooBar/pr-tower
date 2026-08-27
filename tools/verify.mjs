@@ -138,6 +138,26 @@ for (const theme of ["dark", "light"]) {
     await page.waitForSelector(".dialog");
     await page.screenshot({ path: `${out}/${theme}-confirm.png` });
 
+    // A modal owes the keyboard four things; check the two that are observable
+    // from outside: it takes focus, and Escape closes it.
+    const focusInside = await page.evaluate(() =>
+      Boolean(document.activeElement?.closest(".dialog")),
+    ).catch(() => null);
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(200);
+    const closed = (await page.locator(".dialog").count()) === 0;
+    console.log(`modal focus trapped: ${focusInside ? "yes" : "NO"} · escape closes: ${closed ? "yes" : "NO"}`);
+    if (!closed) problems.push("Escape did not close the release dialog");
+
+    // Closing the dialog must leave the selection intact, so the same button is
+    // still there to reopen it.
+    const stillSelected = await page.locator(".dock").count();
+    console.log(`selection survived escape: ${stillSelected ? "yes" : "NO"}`);
+    if (!stillSelected) problems.push("Escape cleared the selection as well as closing the dialog");
+
+    await page.getByRole("button", { name: /release \d+ ▸/ }).first().click();
+    await page.waitForSelector(".dialog");
+
     await page.locator(".dialog .release").click();
     await page.waitForSelector(".dialog .ok, .dialog .bad", { timeout: 15000 });
     const outcome = {
