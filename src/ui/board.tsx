@@ -10,6 +10,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { prLink } from "@/lib/prhub";
 import { priorityLabel, Row } from "./parts";
 import { ChevronRight, Send, Sparkles } from "lucide-react";
 
@@ -128,9 +129,7 @@ export function Queue({ model, handlers }: { model: Model; handlers: Handlers })
                     aria-label={`Select ${item.pr.repo} #${item.pr.number}`}
                   />
                   <a
-                    href={item.pr.url}
-                    target="_blank"
-                    rel="noreferrer"
+                    {...prLink(item.pr.url)}
                     className="line-clamp-2 flex-1 text-sm leading-snug font-medium hover:underline"
                   >
                     {stripTicketPrefix(item.pr.title)}

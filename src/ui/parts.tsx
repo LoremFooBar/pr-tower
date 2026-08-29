@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { prLink } from "@/lib/prhub";
 import {
   AlertTriangle,
   ArrowUpRight,
@@ -156,9 +157,7 @@ export function Row({ item, picked, onPick, onRelease, busy, paired, eyebrow }: 
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <a
-            href={pr.url}
-            target="_blank"
-            rel="noreferrer"
+            {...prLink(pr.url)}
             className="truncate text-sm font-medium hover:underline"
             title={pr.title}
           >
@@ -212,9 +211,7 @@ export function Row({ item, picked, onPick, onRelease, busy, paired, eyebrow }: 
           </Button>
         ) : (
           <a
-            href={pr.url}
-            target="_blank"
-            rel="noreferrer"
+            {...prLink(pr.url)}
             className="text-muted-foreground hover:text-foreground opacity-0 transition-opacity group-hover:opacity-100"
             aria-label="Open on GitHub"
           >

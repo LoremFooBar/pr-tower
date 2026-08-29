@@ -106,6 +106,21 @@ Three things about it:
 `FRESH_MS` still guards client-driven loads, but the five-minute timer means the
 snapshot is rarely old enough for it to matter.
 
+## Opening a PR in Chrome
+
+A PR link is a real `<a href>` to github.com and stays one. When the PR Hub
+extension (`~/repos/PR-HUB`) is installed its content script marks the page with
+`data-pr-hub="1"`; only then does `prLink` (`src/lib/prhub.ts`) intercept a plain
+left-click and post the URL to the extension, which brings the PR up in its
+"My PRs" tab group instead of opening a duplicate tab.
+
+- **This page can never do it alone.** Tab groups are `chrome.tabGroups`, an
+  extension-only API. A custom URL scheme does not help: handler URLs must be
+  HTTP(S), so they land on a page with the same limitation.
+- **Modified clicks are left alone.** Cmd/Ctrl/Shift/Alt and any non-primary
+  button keep the browser's own behaviour, and with no extension present nothing
+  is intercepted at all.
+
 ## Domain rules worth keeping
 
 - **Three gates, no more.** CI, Merge, Path. They are the conditions under which
