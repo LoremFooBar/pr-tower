@@ -9,8 +9,9 @@ review. It ships as a **Docker container**: a small Node server that holds the
 credentials and serves one self-contained HTML page. React 19 + TypeScript +
 Vite + Tailwind 4 + shadcn/ui for the client, plain `node:http` for the server.
 
-It replaced a Chrome extension (`~/repos/PR-TOWER`, itself a fork of
-`~/repos/PR-HUB`). That extension still exists but this is the live line of work.
+It replaced a Chrome extension, itself a fork of `~/repos/PR-HUB`; that fork has
+been deleted. PR Hub is still in use and still separate — see "Opening a PR in
+Chrome" for the one place the two tools meet.
 
 ## Why a server, when the client could talk to both APIs directly
 
