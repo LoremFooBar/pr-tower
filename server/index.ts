@@ -16,6 +16,14 @@ const SNAPSHOT = process.env.PRTOWER_SNAPSHOT ?? "/data/snapshot.json";
 // unless it is older than this or the client asks for a forced refresh.
 const FRESH_MS = 15 * 60 * 1000;
 
+// The server refreshes on its own at this interval, so an open board is never
+// more than this stale. It is the app's standing API cost with nobody watching.
+const AUTO_MS = 5 * 60 * 1000;
+
+// Long enough to be cheap, short enough that a stream dropped by a sleeping
+// laptop surfaces as an error the browser can reconnect from.
+const BEAT_MS = 25 * 1000;
+
 interface Snapshot {
   prs: PullRequest[];
   issues: LinearIssue[];
@@ -26,6 +34,14 @@ interface Snapshot {
 
 let snapshot: Snapshot | null = readSnapshot();
 let inFlight: Promise<Snapshot> | null = null;
+const listeners = new Set<ServerResponse>();
+
+// The frame carries the timestamp and nothing else, so the fetch that holds a
+// token stays behind /api/data and inside the container.
+function announce(at: number): void {
+  const frame = `event: sync\ndata: ${JSON.stringify({ at })}\n\n`;
+  for (const res of listeners) res.write(frame);
+}
 
 function readSnapshot(): Snapshot | null {
   try {
@@ -114,6 +130,7 @@ function refresh(force: boolean): Promise<Snapshot> {
     const next: Snapshot = { prs, issues, rollups, at: Date.now(), login: user.login };
     snapshot = next;
     writeSnapshot(next);
+    announce(next.at);
     return next;
   })().finally(() => {
     inFlight = null;
@@ -177,6 +194,24 @@ const routes: Record<string, (req: IncomingMessage, res: ServerResponse, url: UR
     } catch (err) {
       send(res, 502, { error: err instanceof Error ? err.message : "Refresh failed." });
     }
+  },
+
+  async "GET /api/events"(req, res) {
+    res.writeHead(200, {
+      "content-type": "text/event-stream; charset=utf-8",
+      "cache-control": "no-store",
+      connection: "keep-alive",
+      "x-accel-buffering": "no",
+    });
+    // Node holds the headers back until the first write, and a subscriber that
+    // has not seen them yet cannot know the stream is open.
+    res.write(": open\n\n");
+    listeners.add(res);
+    const beat = setInterval(() => res.write(": beat\n\n"), BEAT_MS);
+    req.on("close", () => {
+      clearInterval(beat);
+      listeners.delete(res);
+    });
   },
 
   async "POST /api/send"(req, res) {
@@ -249,6 +284,14 @@ const server = createServer(async (req, res) => {
     res.writeHead(500).end("The app bundle is missing. Rebuild the image.");
   }
 });
+
+// A failed automatic refresh keeps the last snapshot and says nothing: nobody
+// asked for this one, and the next attempt is five minutes away.
+const auto = setInterval(() => {
+  if (!loadTokens().githubToken) return;
+  refresh(true).catch(() => {});
+}, AUTO_MS);
+auto.unref();
 
 server.listen(PORT, () => {
   console.log(`PR Tower on http://localhost:${PORT}`);

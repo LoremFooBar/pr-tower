@@ -38,6 +38,22 @@ export function getData(force = false): Promise<Data> {
   return call<Data>(`/api/data${force ? "?force=1" : ""}`);
 }
 
+// The server publishes a timestamp, never data: a token-holding fetch still
+// happens only inside the container. EventSource reconnects on its own, so a
+// dropped stream costs one missed frame, not the live board.
+export function onSync(handler: (at: number) => void): () => void {
+  const source = new EventSource("/api/events");
+  source.addEventListener("sync", (event) => {
+    try {
+      const { at } = JSON.parse((event as MessageEvent<string>).data) as { at: number };
+      if (typeof at === "number") handler(at);
+    } catch {
+      // A malformed frame is not worth breaking the stream over.
+    }
+  });
+  return () => source.close();
+}
+
 export interface ConfigInput {
   githubToken?: string;
   linearKey?: string;

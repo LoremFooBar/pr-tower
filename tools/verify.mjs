@@ -173,6 +173,32 @@ for (const theme of ["dark", "light"]) {
   await page.close();
 }
 
+// The auto-sync signal: a subscriber must hear about a refresh it did not ask
+// for. Driven by a forced refresh, because the five-minute timer outlives the
+// test run.
+{
+  const stream = await fetch(`http://localhost:${APP}/api/events`);
+  const reader = stream.body.getReader();
+  const decoder = new TextDecoder();
+  let seen = "";
+  const untilSync = (async () => {
+    while (!/^event: sync$/m.test(seen)) {
+      const { value, done } = await reader.read();
+      if (done) return seen;
+      seen += decoder.decode(value, { stream: true });
+    }
+    return seen;
+  })();
+
+  await fetch(`http://localhost:${APP}/api/data?force=1`);
+  const frame = await Promise.race([untilSync, new Promise((r) => setTimeout(() => r(seen), 15000))]);
+
+  if (!/^event: sync$/m.test(frame)) problems.push("a refresh reached no /api/events subscriber");
+  else console.log(`sync signal delivered: ${frame.trim().split("\n").join(" ")}`);
+  if (/ghp_|lin_api_/.test(frame)) problems.push("the event stream leaked a token");
+  await reader.cancel();
+}
+
 await browser.close();
 stop();
 rmSync(state, { recursive: true, force: true });

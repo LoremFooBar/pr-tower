@@ -68,7 +68,7 @@ silent half-inlined file cannot ship.
 
 ```
 server/       runs in the container, holds the credentials
-  index.ts    http server: /api/status, /api/config, /api/data, /api/send
+  index.ts    http server: /api/status, /api/config, /api/data, /api/events, /api/send
   config.ts   token storage in /data, env overrides
   github.ts   REST reads, and the one GraphQL write
   linear.ts   Linear GraphQL reads
@@ -85,6 +85,26 @@ tools/        font embedding, the mock upstream, the verification harness
 
 The server does the fetching and caching; the browser does the modelling and the
 rendering. `src/core/types.ts` is the contract, imported by both.
+
+## Staying current
+
+The server refreshes itself every five minutes and pushes a `sync` event,
+carrying only the snapshot timestamp, down `/api/events` to every open page. The
+page then re-reads `/api/data`, which is served from the snapshot it just built.
+
+Three things about it:
+
+- **The event carries a timestamp, not data.** The fetch that holds a token
+  still happens only inside the container, and the stream stays cheap enough to
+  ignore.
+- **The background pull raises no spinner.** The Sync button's spinner answers
+  for a press; a board that stirs on a timer nobody touched reads as a fault.
+- **Write the SSE headers with a first chunk.** Node holds headers back until
+  something is written, so a subscriber cannot tell an open stream from a stalled
+  one until the first `: open` comment arrives. `npm run verify` covers this.
+
+`FRESH_MS` still guards client-driven loads, but the five-minute timer means the
+snapshot is rarely old enough for it to matter.
 
 ## Domain rules worth keeping
 

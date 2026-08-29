@@ -1,10 +1,11 @@
-import { StrictMode, useCallback, useEffect, useMemo, useState } from "react";
+import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { toast, Toaster } from "sonner";
 import { buildModel } from "@/core/model";
 import {
   getData,
   getStatus,
+  onSync,
   saveConfig,
   sendForReview,
   undoRelease,
@@ -57,6 +58,8 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  const seenAt = useRef(0);
+
   const [picked, setPicked] = useState<Set<number>>(new Set());
   const [pending, setPending] = useState<Item[] | null>(null);
   const [busy, setBusy] = useState<Set<number>>(new Set());
@@ -77,6 +80,24 @@ function App() {
       setLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    if (snapshot) seenAt.current = snapshot.at;
+  }, [snapshot]);
+
+  // The server refreshes on its own; this collects the result. It deliberately
+  // does not raise `loading`: the spinner answers for the Sync button, and a
+  // board that flickers on a timer nobody pressed reads as a fault.
+  useEffect(() => {
+    if (!status?.githubToken) return;
+    return onSync((at) => {
+      if (at <= seenAt.current) return;
+      seenAt.current = at;
+      getData()
+        .then(setSnapshot)
+        .catch(() => {});
+    });
+  }, [status?.githubToken]);
 
   useEffect(() => {
     getStatus()
