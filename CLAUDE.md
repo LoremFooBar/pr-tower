@@ -172,7 +172,8 @@ Two things are held outside the shadcn palette on purpose, in `src/styles.css`:
 - `--ok`, `--warn`, `--wait`, `--done` carry *work state*. A theme change must
   not silently repaint the meaning of a row.
 - The embedded fonts (Geist, Geist Mono) come from `npm run fonts`, so the page
-  still makes no external request.
+  still makes no external request. The favicon is an inline SVG data URI in
+  `index.html` for the same reason: the CSP would refuse to fetch a file.
 
 The one bespoke element that survived is the **bay spine** — one cell per
 sub-issue across a parent task, read left to right: done, ready, needs you, in
