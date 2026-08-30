@@ -160,6 +160,17 @@ for (const theme of ["dark", "light"]) {
       console.log(`ready after undo: ${await cards().count()} (was ${ready})`);
     }
 
+    // The demo fixture stacks #418 on #412, so both ends of that stack must be
+    // badged — the bottom PR has no parent and is easy to leave out.
+    const stackBadges = await page.getByText(/\b[12] of 2\b/).count();
+    console.log(`stack badges shown      : ${stackBadges} (want 2+)`);
+    if (stackBadges < 2) problems.push("a stack did not badge both of its PRs");
+
+    // Two PRs of ACME-980 are tied together, so exactly one group is bracketed.
+    const tied = await page.locator("[data-tied]").count();
+    console.log(`tied groups bracketed   : ${tied} (want 1+)`);
+    if (tied < 1) problems.push("a ticket with two PRs drew no tie");
+
     const server = await (await fetch(`http://localhost:${APP}/api/data`)).json();
     console.log(`server drafts remaining: ${server.prs.filter((pr) => pr.draft).length}`);
 

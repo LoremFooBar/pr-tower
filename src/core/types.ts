@@ -129,7 +129,21 @@ export interface Item {
   scoreParts: ScorePart[];
   // Ticket ids of the user's other open PRs waiting on this one.
   unblocks: string[];
+  // Set on every PR of a stack, the bottom one included.
+  stack?: StackInfo;
   idleDays: number;
+}
+
+// One PR's place in a chain of branches stacked on each other.
+export interface StackInfo {
+  /** Open PRs in the chain, this one included. Never below 2. */
+  size: number;
+  /** 1-based, counting from the PR that merges first. */
+  position: number;
+  /** The PR this one is branched off. Absent at the bottom. */
+  parent?: PullRequest;
+  /** The PRs branched directly off this one. Empty at the top. */
+  children: PullRequest[];
 }
 
 export interface TicketNode {

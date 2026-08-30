@@ -139,9 +139,30 @@ left-click and post the URL to the extension, which brings the PR up in its
   own PR strands in "Standalone tickets".
 - **Nothing is said twice on one row.** The card's reason chips own the score, so
   the card foot does not repeat idle days.
-- **PRs of one ticket land together.** They are tied by a rule in the row gutter
-  and select as a pair, because the gutter's glyph slot is taken by the release
-  checkbox — exactly the row where the pairing matters most.
+- **Stacking is context, not a gate.** A PR branched off another open PR is
+  perfectly reviewable — reviewers usually want the whole stack at once — so it
+  keeps its lane and its place in the queue and only carries a badge naming the
+  parent. Same reasoning as "behind base". The Path gate stays reserved for a
+  Linear blocker, which says the *work* cannot proceed, not merely the merge.
+- **A stack is read off the branch names**, not from any extra API call:
+  `stacks` in `model.ts` matches one PR's `baseRef` to another's `headRef` in the
+  same repo. GitHub retargets a child when its parent merges, so passing only
+  open PRs makes the relation clear itself, exactly as `openTickets` spends a
+  Linear blocker.
+- **Every PR of a stack is badged, the bottom one included**, and the badge is
+  its position: `2 of 3`. Tagging only the PRs that sit on something else would
+  leave the one that merges first looking unrelated to the chain it starts. The
+  chain is walked in both directions, so the size is the whole stack rather than
+  the part above any one PR.
+- **PRs of one ticket land together.** They select as a pair and are tied by a
+  bracket drawn *beside* the gutter, not in it: the gutter's own slot is taken by
+  the release checkbox, which is exactly the row where the pairing matters most.
+  Every group carries the same left padding, tied or not, so a single row does
+  not shift when its neighbour gains a partner (`Tie` in `parts.tsx`).
+- **The bracket does not extend to stacks.** It can only join rows that sit
+  together, and rows are grouped by ticket — a pair always is, a stack often is
+  not, since a stacked PR usually carries its own ticket. That is why a stack
+  says its position instead.
 - **Blocked is not "need you".** A bay's counts separate them; there is nothing
   to do about a blocked PR yet.
 

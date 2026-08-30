@@ -1,4 +1,4 @@
-import { buildModel } from "../src/core/model";
+import { buildModel, stacks } from "../src/core/model";
 import { buildItem, gatesFor, scoreFor } from "../src/core/rank";
 import { canonicalPRUrl, linkPR, buildIssueIndex, prTicketKey, stripTicketPrefix } from "../src/core/link";
 import { resolveChecks } from "../server/github";
@@ -178,6 +178,91 @@ describe("lanes", () => {
     expect(noCI.signals.some((s) => s.kind === "no_bot")).toBe(false);
     const ready = buildItem(pr({ draft: false, bugbot: "none", hasCI: true }), undefined, new Set(), [], NOW);
     expect(ready.signals.some((s) => s.kind === "no_bot")).toBe(true);
+  });
+});
+
+describe("stacks", () => {
+  const chain = () => {
+    const bottom = pr({ number: 1, headRef: "a", baseRef: "main" });
+    const middle = pr({ number: 2, headRef: "b", baseRef: "a" });
+    const top = pr({ number: 3, headRef: "c", baseRef: "b" });
+    return { bottom, middle, top };
+  };
+
+  it("reads a chain of three off the branch names, whatever order they arrive in", () => {
+    const { bottom, middle, top } = chain();
+
+    const found = stacks([top, bottom, middle]);
+
+    expect(found.get(bottom.id)).toMatchObject({ position: 1, size: 3, parent: undefined });
+    expect(found.get(middle.id)).toMatchObject({ position: 2, size: 3, parent: bottom });
+    expect(found.get(top.id)).toMatchObject({ position: 3, size: 3, parent: middle });
+  });
+
+  it("tags the bottom PR too, which has no parent of its own", () => {
+    const { bottom, middle, top } = chain();
+
+    const info = stacks([bottom, middle, top]).get(bottom.id);
+
+    expect(info?.parent).toBeUndefined();
+    expect(info?.children).toEqual([middle]);
+    expect(info?.size).toBe(3);
+  });
+
+  it("counts the whole chain, not just what sits above a PR", () => {
+    const { bottom, middle, top } = chain();
+
+    for (const member of [bottom, middle, top]) {
+      expect(stacks([bottom, middle, top]).get(member.id)?.size).toBe(3);
+    }
+  });
+
+  it("gives two PRs off one base the same parent and one stack", () => {
+    const base = pr({ number: 1, headRef: "a", baseRef: "main" });
+    const left = pr({ number: 2, headRef: "b", baseRef: "a" });
+    const right = pr({ number: 3, headRef: "c", baseRef: "a" });
+
+    const found = stacks([base, left, right]);
+
+    expect(found.get(base.id)?.children).toEqual([left, right]);
+    expect(found.get(left.id)?.size).toBe(3);
+    expect(found.get(right.id)?.parent).toBe(base);
+  });
+
+  it("does not pair branches of the same name across repositories", () => {
+    const one = pr({ repo: "api", headRef: "shared", baseRef: "main" });
+    const two = pr({ repo: "web", headRef: "feature", baseRef: "shared" });
+
+    expect(stacks([one, two]).size).toBe(0);
+  });
+
+  it("ignores a PR whose base is a branch no open PR owns", () => {
+    const solo = pr({ headRef: "feature", baseRef: "main" });
+
+    expect(stacks([solo]).size).toBe(0);
+  });
+
+  it("hangs the stack on every item, bottom included", () => {
+    const model = buildModel(
+      [pr({ number: 1, headRef: "a", baseRef: "main" }), pr({ number: 2, headRef: "b", baseRef: "a" })],
+      [],
+    );
+
+    expect(model.items.find((item) => item.pr.number === 1)?.stack?.position).toBe(1);
+    expect(model.items.find((item) => item.pr.number === 2)?.stack?.position).toBe(2);
+  });
+
+  // Stacking is context, not a gate: a stacked PR is perfectly reviewable, and
+  // the reviewer usually wants the whole stack at once.
+  it("leaves the gates and the lane alone", () => {
+    const model = buildModel(
+      [pr({ number: 1, headRef: "a", baseRef: "main" }), pr({ number: 2, headRef: "b", baseRef: "a" })],
+      [],
+    );
+    const child = model.items.find((item) => item.pr.number === 2);
+
+    expect(child?.ready).toBe(true);
+    expect(child?.lane).toBe("send");
   });
 });
 

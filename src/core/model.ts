@@ -7,6 +7,7 @@ import type {
   NextMove,
   PullRequest,
   SpineCell,
+  StackInfo,
   TicketNode,
 } from "./types";
 import { buildIssueIndex, linkPR, prTicketKey } from "./link";
@@ -39,6 +40,74 @@ function rung(item: Item): number {
 
 function byLadder(a: Item, b: Item): number {
   return rung(a) - rung(b) || b.score - a.score || a.pr.number - b.pr.number;
+}
+
+// A PR is stacked when its base branch is another open PR's head branch in the
+// same repository. GitHub retargets a child at its grandparent the moment the
+// parent merges, so a stack only ever describes PRs that are both still open —
+// the same way a Linear blocker is spent once its PR lands.
+export function stacks(prs: PullRequest[]): Map<number, StackInfo> {
+  const branch = (pr: PullRequest, ref: string) => `${pr.owner}/${pr.repo}#${ref}`;
+
+  const byHead = new Map<string, PullRequest>();
+  for (const pr of prs) {
+    if (pr.headRef) byHead.set(branch(pr, pr.headRef), pr);
+  }
+
+  const parent = new Map<number, PullRequest>();
+  const children = new Map<number, PullRequest[]>();
+  for (const pr of prs) {
+    const above = pr.baseRef ? byHead.get(branch(pr, pr.baseRef)) : undefined;
+    if (!above || above.id === pr.id) continue;
+    parent.set(pr.id, above);
+    children.set(above.id, [...(children.get(above.id) ?? []), pr]);
+  }
+
+  // Walking up stops at a PR already seen. A branch cannot really be its own
+  // ancestor, but a cycle here would hang the whole page.
+  const depth = (pr: PullRequest): number => {
+    const seen = new Set<number>([pr.id]);
+    let steps = 0;
+    for (let above = parent.get(pr.id); above && !seen.has(above.id); above = parent.get(above.id)) {
+      seen.add(above.id);
+      steps++;
+    }
+    return steps + 1;
+  };
+
+  // Everything reachable through a base/head link, in either direction: a stack
+  // is the whole chain, not the part above or below any one PR.
+  const byId = new Map(prs.map((pr) => [pr.id, pr]));
+  const chain = (start: PullRequest): PullRequest[] => {
+    const found = new Map<number, PullRequest>([[start.id, start]]);
+    const queue = [start];
+    while (queue.length > 0) {
+      const pr = queue.shift()!;
+      const neighbours = [parent.get(pr.id), ...(children.get(pr.id) ?? [])];
+      for (const next of neighbours) {
+        if (!next || found.has(next.id)) continue;
+        found.set(next.id, byId.get(next.id) ?? next);
+        queue.push(next);
+      }
+    }
+    return [...found.values()];
+  };
+
+  const info = new Map<number, StackInfo>();
+  for (const pr of prs) {
+    if (info.has(pr.id)) continue;
+    const members = chain(pr);
+    if (members.length < 2) continue;
+    for (const member of members) {
+      info.set(member.id, {
+        size: members.length,
+        position: depth(member),
+        parent: parent.get(member.id),
+        children: children.get(member.id) ?? [],
+      });
+    }
+  }
+  return info;
 }
 
 function cellFor(item: Item): SpineCell {
@@ -132,9 +201,12 @@ export function buildModel(
     }
   }
 
-  const items = linked.map(({ pr, issue }) =>
-    buildItem(pr, issue, openTickets, issue ? (unblocksMap.get(issue.id) ?? []) : [], now),
-  );
+  const stacked = stacks(prs);
+  const items = linked.map(({ pr, issue }) => {
+    const item = buildItem(pr, issue, openTickets, issue ? (unblocksMap.get(issue.id) ?? []) : [], now);
+    const stack = stacked.get(pr.id);
+    return stack ? { ...item, stack } : item;
+  });
 
   const byTicket = new Map<string, TicketNode>();
   for (const item of items) {

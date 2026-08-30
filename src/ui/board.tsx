@@ -11,7 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { prLink } from "@/lib/prhub";
-import { priorityLabel, Row } from "./parts";
+import { priorityLabel, Row, Tie } from "./parts";
 import { ChevronRight, Send, Sparkles } from "lucide-react";
 
 export interface Handlers {
@@ -62,9 +62,7 @@ function Spine({ cells }: { cells: SpineCell[] }) {
 }
 
 function pairsOf(group: Group) {
-  return group.tickets.flatMap((ticket) =>
-    ticket.items.map((item) => ({ item, paired: ticket.items.length > 1 })),
-  );
+  return group.tickets.map((ticket) => ticket.items);
 }
 
 export function Queue({ model, handlers }: { model: Model; handlers: Handlers }) {
@@ -141,6 +139,11 @@ export function Queue({ model, handlers }: { model: Model; handlers: Handlers })
                   <span>
                     {item.pr.repo} #{item.pr.number}
                   </span>
+                  {item.stack ? (
+                    <span>
+                      stack {item.stack.position} of {item.stack.size}
+                    </span>
+                  ) : null}
                   {item.pr.additions !== undefined ? (
                     <span>
                       +{item.pr.additions} −{item.pr.deletions}
@@ -184,10 +187,11 @@ export function Bay({
   handlers: Handlers;
 }) {
   const [open, setOpen] = useState(defaultOpen);
-  const rows = pairsOf(group);
-  const cleared = rows.filter(({ item }) => item.lane === "send").map(({ item }) => item);
+  const tickets = pairsOf(group);
+  const rows = tickets.flat();
+  const cleared = rows.filter((item) => item.lane === "send");
   const priority = priorityLabel(group.epic);
-  const blocked = rows.filter(({ item }) =>
+  const blocked = rows.filter((item) =>
     item.signals.some((signal) => signal.kind === "blocked"),
   ).length;
 
@@ -269,16 +273,20 @@ export function Bay({
                 </Button>
               </div>
             ) : null}
-            {rows.map(({ item, paired }) => (
-              <Row
-                key={item.pr.id}
-                item={item}
-                paired={paired}
-                picked={handlers.picked.has(item.pr.id)}
-                onPick={() => handlers.onPick(item)}
-                onRelease={() => handlers.onRelease([item])}
-                busy={handlers.busy.has(item.pr.id)}
-              />
+            {tickets.map((ticket) => (
+              <Tie key={ticket[0].pr.id} tied={ticket.length > 1}>
+                {ticket.map((item) => (
+                  <Row
+                    key={item.pr.id}
+                    item={item}
+                    paired={ticket.length > 1}
+                    picked={handlers.picked.has(item.pr.id)}
+                    onPick={() => handlers.onPick(item)}
+                    onRelease={() => handlers.onRelease([item])}
+                    busy={handlers.busy.has(item.pr.id)}
+                  />
+                ))}
+              </Tie>
             ))}
           </div>
         </CollapsibleContent>
@@ -316,20 +324,22 @@ export function Ledger({
       </div>
       <Card className="gap-0 py-2">
         <CardContent className="space-y-0.5 px-2">
-          {[...byTicket.values()].flatMap((group) =>
-            group.map((item) => (
-              <Row
-                key={item.pr.id}
-                item={item}
-                paired={group.length > 1}
-                eyebrow={item.issue?.parentId}
-                picked={handlers.picked.has(item.pr.id)}
-                onPick={() => handlers.onPick(item)}
-                onRelease={() => handlers.onRelease([item])}
-                busy={handlers.busy.has(item.pr.id)}
-              />
-            )),
-          )}
+          {[...byTicket.values()].map((group) => (
+            <Tie key={group[0].pr.id} tied={group.length > 1}>
+              {group.map((item) => (
+                <Row
+                  key={item.pr.id}
+                  item={item}
+                  paired={group.length > 1}
+                  eyebrow={item.issue?.parentId}
+                  picked={handlers.picked.has(item.pr.id)}
+                  onPick={() => handlers.onPick(item)}
+                  onRelease={() => handlers.onRelease([item])}
+                  busy={handlers.busy.has(item.pr.id)}
+                />
+              ))}
+            </Tie>
+          ))}
         </CardContent>
       </Card>
     </section>

@@ -1,4 +1,5 @@
-import type { Item, LinearIssue } from "@/core/types";
+import type { ReactNode } from "react";
+import type { Item, LinearIssue, StackInfo } from "@/core/types";
 import { stripTicketPrefix } from "@/core/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,7 @@ import {
   CircleX,
   Clock,
   GitPullRequestArrow,
+  Layers,
   Link2Off,
   Loader2,
   Send,
@@ -117,6 +119,36 @@ function ReviewState({ item }: { item: Item }) {
   );
 }
 
+function stackDetail(stack: StackInfo): string {
+  const waiting = stack.children.map((child) => `#${child.number}`);
+  const above = stack.parent ? `Branched off #${stack.parent.number}` : "Merges first";
+  const below =
+    waiting.length === 0
+      ? "nothing waits on it yet"
+      : `${waiting.join(" and ")} ${waiting.length === 1 ? "waits" : "wait"} on it`;
+  return `${above}; ${below}.`;
+}
+
+// Two PRs of one ticket have to land together, so the rows are tied by a rule
+// beside the gutter — the gutter's own slot is taken by the release checkbox,
+// which is exactly the row where the tie matters most. The padding is on every
+// group, tied or not, so single rows still line up.
+export function Tie({ tied, children }: { tied: boolean; children: ReactNode }) {
+  return (
+    // The flag is the testable part: the rule itself is utility classes, which
+    // are not a contract anything should be pinned to.
+    <div className="relative pl-3" data-tied={tied ? "true" : undefined}>
+      {tied ? (
+        <span
+          aria-hidden
+          className="border-muted-foreground/45 absolute inset-y-3 left-0.5 w-2 rounded-l-[3px] border-t border-b border-l"
+        />
+      ) : null}
+      {children}
+    </div>
+  );
+}
+
 interface RowProps {
   item: Item;
   picked?: boolean;
@@ -172,6 +204,17 @@ export function Row({ item, picked, onPick, onRelease, busy, paired, eyebrow }: 
                 </Badge>
               </TooltipTrigger>
               <TooltipContent>Lands together with the other PR on this ticket</TooltipContent>
+            </Tooltip>
+          ) : null}
+          {item.stack ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge variant="outline" className="shrink-0 gap-1 text-[10px] font-normal">
+                  <Layers className="size-3" />
+                  {item.stack.position} of {item.stack.size}
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent>{stackDetail(item.stack)}</TooltipContent>
             </Tooltip>
           ) : null}
         </div>
