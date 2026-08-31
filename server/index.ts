@@ -12,6 +12,18 @@ const here = dirname(fileURLToPath(import.meta.url));
 const INDEX = resolve(here, "index.html");
 const SNAPSHOT = process.env.PRTOWER_SNAPSHOT ?? "/data/snapshot.json";
 
+// The page still carries everything it renders. These are the only files a
+// browser must fetch separately, and it fetches them to offer the app for
+// install: a manifest cannot be inlined, and manifest icons cannot be data URIs.
+// The paths are keys of this map, never taken from the request, so there is
+// nothing to traverse with.
+const INSTALL_FILES: Record<string, string> = {
+  "/manifest.webmanifest": "application/manifest+json",
+  "/icon-192.png": "image/png",
+  "/icon-512.png": "image/png",
+  "/icon-maskable-512.png": "image/png",
+};
+
 // A refresh costs four GitHub calls per PR, plus a fifth for a PR sharing its
 // repository with another, so repeat loads serve the last one unless it is older
 // than this or the client asks for a forced refresh.
@@ -269,14 +281,28 @@ const server = createServer(async (req, res) => {
 
   if (url.pathname.startsWith("/api/")) return send(res, 404, { error: "No such endpoint." });
 
+  const installType = INSTALL_FILES[url.pathname];
+  if (installType) {
+    try {
+      const body = readFileSync(resolve(here, url.pathname.slice(1)));
+      res.writeHead(200, { "content-type": installType, "cache-control": "no-store" });
+      return res.end(body);
+    } catch {
+      return send(res, 404, { error: "That file is not in the image." });
+    }
+  }
+
   // Everything else is the app: one self-contained HTML file.
   try {
     res.writeHead(200, {
       "content-type": "text/html; charset=utf-8",
       "cache-control": "no-store",
       // The page loads nothing from anywhere, and talks only to its own origin.
+      // manifest-src and the 'self' in img-src are the whole cost of being
+      // installable: the manifest and its icons are same-origin files rather
+      // than data URIs. Nothing external is reachable from either.
       "content-security-policy":
-        "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; font-src data:; img-src data:; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+        "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; font-src data:; img-src 'self' data:; connect-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
       "referrer-policy": "no-referrer",
       "x-content-type-options": "nosniff",
     });

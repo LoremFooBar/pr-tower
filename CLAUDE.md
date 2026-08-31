@@ -46,6 +46,30 @@ Do not move the tokens back to the client.
 - **The page's CSP allows no external anything** and no injected script. Tailwind
   and React are inlined at build time, so this still holds.
 
+## Installable
+
+The page is installable as a PWA, so it gets its own window and dock icon rather
+than a browser tab. No service worker: one is **not** required for
+installability, and a caching worker would fight the `no-store` on the page and
+eventually serve a stale bundle from a rebuilt image. Offline would buy nothing
+anyway — the app is inert without its server.
+
+That costs the single-file property a little, and the CSP two directives:
+
+- **Three files leave the bundle**: `public/manifest.webmanifest` and two icons
+  (plus a maskable one). A manifest cannot be inlined, and manifest icons cannot
+  be data URIs. `INSTALL_FILES` in `server/index.ts` serves them from a fixed
+  map, so no path comes from the request.
+- **`img-src 'self'` and `manifest-src 'self'`** join the policy. Nothing
+  external became reachable; `npm run verify` asserts the policy still carries
+  `default-src 'none'` and names no host.
+- **Icons are committed, like the fonts.** `npm run icons` renders them from the
+  favicon already inlined in `index.html`, so the mark has one source of truth.
+  It cannot be part of `npm run build`: the image builds with `npm ci`, which
+  installs no Playwright browser.
+- **`localhost` is enough.** Chromium allows install from `localhost` and
+  `127.0.0.1` without HTTPS, so the loopback-only rule is untouched.
+
 ## Build
 
 The client single file comes from a custom Vite plugin (`inlineEverything` in

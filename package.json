@@ -14,7 +14,8 @@
     "start": "node dist/server.js",
     "up": "docker compose up -d --build",
     "down": "docker compose down",
-    "logs": "docker compose logs -f"
+    "logs": "docker compose logs -f",
+    "icons": "node tools/make-icons.mjs"
   },
   "devDependencies": {
     "@swc/core": "^1.15.43",

@@ -12,6 +12,9 @@ WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=build /app/dist/server.js ./server.js
 COPY --from=build /app/dist/index.html ./index.html
+# The manifest and its icons: a browser will not offer an install without them.
+COPY --from=build /app/dist/manifest.webmanifest ./manifest.webmanifest
+COPY --from=build /app/dist/icon-*.png ./
 
 # The tokens live in /data. Owned by the unprivileged node user so nothing in
 # the container runs as root near them.

@@ -193,6 +193,50 @@ for (const theme of ["dark", "light"]) {
   await page.close();
 }
 
+// Installability: the manifest and its icons are the only files the page does
+// not carry itself, so they are the only ones that can go missing from the
+// image. Chrome logs a manifest it dislikes as a console error, which the page
+// listeners above already collect.
+{
+  const res = await fetch(`http://localhost:${APP}/manifest.webmanifest`);
+  const type = res.headers.get("content-type") ?? "";
+  const manifest = await res.json().catch(() => null);
+  console.log(`manifest served         : ${res.status} ${type}`);
+  if (!type.includes("application/manifest+json")) problems.push(`manifest content-type was ${type}`);
+
+  const sizes = (manifest?.icons ?? []).map((icon) => icon.sizes);
+  for (const required of ["192x192", "512x512"]) {
+    if (!sizes.includes(required)) problems.push(`manifest declares no ${required} icon`);
+  }
+  if (manifest?.start_url !== "/") problems.push("manifest start_url is not /");
+  if (!manifest?.display) problems.push("manifest declares no display mode");
+
+  for (const icon of manifest?.icons ?? []) {
+    const image = await fetch(`http://localhost:${APP}${icon.src}`);
+    const imageType = image.headers.get("content-type") ?? "";
+    if (!image.ok || !imageType.includes("image/png")) {
+      problems.push(`${icon.src} came back ${image.status} ${imageType}`);
+    }
+  }
+  console.log(`icons served            : ${(manifest?.icons ?? []).length}`);
+
+  // Chrome's own verdict on the manifest, which is the one that decides whether
+  // an install is offered at all.
+  const check = await browser.newPage();
+  await check.goto(`http://localhost:${APP}/`);
+  const cdp = await check.context().newCDPSession(check);
+  const parsed = await cdp.send("Page.getAppManifest");
+  console.log(`chrome manifest errors  : ${parsed.errors.length}`);
+  for (const error of parsed.errors) problems.push(`manifest: ${error.message ?? JSON.stringify(error)}`);
+  await check.close();
+
+  // The install files are same-origin; the policy must still reach nowhere else.
+  const csp = (await fetch(`http://localhost:${APP}/`)).headers.get("content-security-policy") ?? "";
+  if (!csp.includes("default-src 'none'")) problems.push("the page lost default-src 'none'");
+  if (!csp.includes("manifest-src 'self'")) problems.push("the CSP does not allow its own manifest");
+  if (/https?:\/\//.test(csp)) problems.push(`the CSP names an external host: ${csp}`);
+}
+
 // The auto-sync signal: a subscriber must hear about a refresh it did not ask
 // for. Driven by a forced refresh, because the five-minute timer outlives the
 // test run.
