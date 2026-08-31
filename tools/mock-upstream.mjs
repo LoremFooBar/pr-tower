@@ -52,6 +52,14 @@ createServer(async (req, res) => {
   m = path.match(/^\/repos\/([^/]+)\/([^/]+)\/pulls\/(\d+)\/reviews$/);
   if (m) return json(res, fixture.reviews[`${m[1]}/${m[2]}/${m[3]}`] ?? []);
 
+  // Oldest first, like GitHub, and relative to the PR's base — which is why a
+  // child in a declared stack lists none of its parent's commits.
+  m = path.match(/^\/repos\/([^/]+)\/([^/]+)\/pulls\/(\d+)\/commits$/);
+  if (m) {
+    const shas = fixture.commits?.[`${m[1]}/${m[2]}/${m[3]}`] ?? [];
+    return json(res, shas.map((sha) => ({ sha })));
+  }
+
   m = path.match(/^\/repos\/[^/]+\/[^/]+\/commits\/([0-9a-f]+)\/status$/);
   // Matches reality: Actions-only repositories have no legacy statuses, and
   // the combined-status API calls that "pending".

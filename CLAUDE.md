@@ -137,6 +137,19 @@ left-click and post the URL to the extension, which brings the PR up in its
 - **A blocker is spent once its PR merges.** `openTickets` gates that.
 - **An epic that owns a PR and sub-tickets groups under itself**, otherwise its
   own PR strands in "Standalone tickets".
+- **When two tickets claim one PR, the ticket the PR names wins.** A parent and
+  the child a PR was opened for can both list its URL, and the index keeps only
+  the last one read — so which ticket a PR landed under depended on the order
+  Linear returned the issues. `linkPR` now prefers a claimant the PR's own title
+  or branch names. Linear's attachment still wins for a PR whose title carries no
+  key at all.
+- **A bay belongs to the epic at the top of the chain, not to the ticket one
+  level up.** Linear nests as deep as you like, and grouping by the immediate
+  parent put a grandchild in a group of its own — which never reaches the two
+  PRs a bay needs, so it dropped into the singles ledger while its siblings sat
+  in the epic's bay. `rootOf` in `model.ts` walks to the top. The same walk fills
+  `Item.epicId`, which is what the ledger's eyebrow names: the immediate parent
+  is not reliably the epic.
 - **Nothing is said twice on one row.** The card's reason chips own the score, so
   the card foot does not repeat idle days.
 - **Stacking is context, not a gate.** A PR branched off another open PR is
@@ -144,11 +157,22 @@ left-click and post the URL to the extension, which brings the PR up in its
   keeps its lane and its place in the queue and only carries a badge naming the
   parent. Same reasoning as "behind base". The Path gate stays reserved for a
   Linear blocker, which says the *work* cannot proceed, not merely the merge.
-- **A stack is read off the branch names**, not from any extra API call:
-  `stacks` in `model.ts` matches one PR's `baseRef` to another's `headRef` in the
-  same repo. GitHub retargets a child when its parent merges, so passing only
-  open PRs makes the relation clear itself, exactly as `openTickets` spends a
-  Linear blocker.
+- **A stack is read two ways, and the branch names come first.** `stacks` in
+  `model.ts` matches one PR's `baseRef` to another's `headRef` in the same repo —
+  free, exact, and the only reading that works once a PR is retargeted. GitHub
+  retargets a child when its parent merges, so passing only open PRs makes the
+  relation clear itself, exactly as `openTickets` spends a Linear blocker.
+- **The second reading catches a stack GitHub was never told about**: PRs each
+  opened against `main` with the branches chained in git anyway. One PR's commit
+  list then contains another's head commit, because GitHub lists a PR's commits
+  relative to its base — which is also why a *declared* stack shows no overlap at
+  all, and why the branch rule cannot be dropped. In a chain of three the top PR
+  holds both other heads, so the nearer parent is the one with more commits; an
+  equal count is two branches at one commit and nobody's parent.
+- **The commit lists cost a call per PR, so only repositories with more than one
+  open PR pay it.** A stack cannot span repositories, so nothing is lost. The
+  first page of 100 commits is enough: the list is oldest-first, and a parent's
+  head sits at that end.
 - **Every PR of a stack is badged, the bottom one included**, and the badge is
   its position: `2 of 3`. Tagging only the PRs that sit on something else would
   leave the one that merges first looking unrelated to the chain it starts. The
@@ -175,8 +199,14 @@ once, so readiness is demoted — visible always, navigated never.
 
 One scrolling page, in this order:
 
-1. **Cleared queue** — pinned cards for every draft whose three gates are open,
-   ranked by score. When empty it names the draft closest to clearing.
+1. **Cleared queue** — collapsed to a single line by default, because every PR
+   in it also has a row in its epic below and the cards were a second telling of
+   the same thing. What the line keeps is the part the bays cannot give: the
+   count, and one release across every epic at once. Expanded, it is a card per
+   draft whose three gates are open, ranked by score. When empty it stays a
+   sentence naming the draft closest to clearing.
+   Radix drops collapsed content, so anything driving those cards — `npm run
+   verify` included — has to open the section first.
 2. **Bays** — one per epic, ordered by epic priority then id. The order is
    deliberately **stable**: a board kept open all day must not reshuffle between
    glances. Urgency already has a home in the queue.

@@ -67,6 +67,10 @@ function pairsOf(group: Group) {
 
 export function Queue({ model, handlers }: { model: Model; handlers: Handlers }) {
   const cleared = model.queue;
+  // Collapsed by default: every one of these PRs also has a row in its epic
+  // below, so the cards are a second telling. What the header keeps is the only
+  // thing the bays cannot give — one release across every epic at once.
+  const [open, setOpen] = useState(false);
 
   if (cleared.length === 0) {
     return (
@@ -89,28 +93,39 @@ export function Queue({ model, handlers }: { model: Model; handlers: Handlers })
   }
 
   return (
-    <section>
-      <div className="mb-3 flex items-center gap-2">
-        <Sparkles className="text-primary size-4" />
-        <h2 className="text-sm font-semibold">Ready to release</h2>
-        <Badge variant="secondary" className="font-mono">
-          {cleared.length}
-        </Badge>
-        <div className="flex-1" />
-        {cleared.length > 1 ? (
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-7 gap-1.5 text-xs"
-            onClick={() => handlers.onRelease(cleared)}
-          >
-            <Send className="size-3" />
-            Release all {cleared.length}
-          </Button>
-        ) : null}
-      </div>
+    <Collapsible open={open} onOpenChange={setOpen} asChild>
+      <section>
+        <div className="flex items-center gap-2">
+          <CollapsibleTrigger asChild>
+            <button className="hover:text-foreground text-foreground/90 flex items-center gap-2 rounded-md text-sm font-semibold transition-colors">
+              <ChevronRight
+                className={cn(
+                  "text-muted-foreground size-4 shrink-0 transition-transform",
+                  open && "rotate-90",
+                )}
+              />
+              <Sparkles className="text-primary size-4" />
+              Ready to release
+              <Badge variant="secondary" className="font-mono">
+                {cleared.length}
+              </Badge>
+            </button>
+          </CollapsibleTrigger>
+          <div className="flex-1" />
+          {cleared.length > 1 ? (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 gap-1.5 text-xs"
+              onClick={() => handlers.onRelease(cleared)}
+            >
+              <Send className="size-3" />
+              Release all {cleared.length}
+            </Button>
+          ) : null}
+        </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <CollapsibleContent className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {cleared.map((item) => {
           const picked = handlers.picked.has(item.pr.id);
           return (
@@ -172,8 +187,9 @@ export function Queue({ model, handlers }: { model: Model; handlers: Handlers })
             </Card>
           );
         })}
-      </div>
-    </section>
+        </CollapsibleContent>
+      </section>
+    </Collapsible>
   );
 }
 
@@ -331,7 +347,7 @@ export function Ledger({
                   key={item.pr.id}
                   item={item}
                   paired={group.length > 1}
-                  eyebrow={item.issue?.parentId}
+                  eyebrow={item.epicId}
                   picked={handlers.picked.has(item.pr.id)}
                   onPick={() => handlers.onPick(item)}
                   onRelease={() => handlers.onRelease([item])}

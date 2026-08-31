@@ -105,6 +105,14 @@ for (const theme of ["dark", "light"]) {
   // Selectors go through roles and text: shadcn emits utility classes, which are
   // not a contract anything should be pinned to.
   const cards = () => page.getByRole("button", { name: /Release for review/ });
+
+  // The queue starts collapsed and Radix drops the content, so everything below
+  // needs it opened first.
+  const queue = page.getByRole("button", { name: /Ready to release/ });
+  await queue.waitFor({ timeout: 20000 });
+  await page.screenshot({ path: `${out}/${theme}-collapsed.png`, fullPage: true });
+  if ((await cards().count()) > 0) problems.push("the queue rendered its cards while collapsed");
+  await queue.click();
   await cards().first().waitFor({ timeout: 20000 });
   await page.waitForTimeout(600);
   await page.screenshot({ path: `${out}/${theme}-board.png`, fullPage: true });
@@ -160,11 +168,12 @@ for (const theme of ["dark", "light"]) {
       console.log(`ready after undo: ${await cards().count()} (was ${ready})`);
     }
 
-    // The demo fixture stacks #418 on #412, so both ends of that stack must be
-    // badged — the bottom PR has no parent and is easy to leave out.
+    // Two stacks of two in the fixture, read two different ways: #418 declares
+    // #412 as its base, while worker #81 only carries #77's head commit. Four
+    // badges, because both ends of a stack are badged.
     const stackBadges = await page.getByText(/\b[12] of 2\b/).count();
-    console.log(`stack badges shown      : ${stackBadges} (want 2+)`);
-    if (stackBadges < 2) problems.push("a stack did not badge both of its PRs");
+    console.log(`stack badges shown      : ${stackBadges} (want 4)`);
+    if (stackBadges < 4) problems.push(`only ${stackBadges} stack badges; a stack went unread`);
 
     // Two PRs of ACME-980 are tied together, so exactly one group is bracketed.
     const tied = await page.locator("[data-tied]").count();

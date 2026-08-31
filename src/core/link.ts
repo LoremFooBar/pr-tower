@@ -63,8 +63,18 @@ export function buildIssueIndex(issues: LinearIssue[]): IssueIndex {
 // fallback for a PR the integration never attached.
 export function linkPR(pr: PullRequest, index: IssueIndex): LinearIssue | undefined {
   const canonical = canonicalPRUrl(pr.url);
-  const attached = canonical ? index.byPRUrl.get(canonical) : undefined;
-  if (attached) return attached;
   const key = prTicketKey(pr);
-  return key ? index.byKey.get(key) : undefined;
+  const named = key ? index.byKey.get(key) : undefined;
+
+  // Two tickets can claim one PR — a parent and the child it was opened for
+  // both list the URL — and the index can only keep the last one it read. When
+  // the PR names one of the claimants in its own title or branch, that is the
+  // ticket the developer meant, and the answer stops depending on the order
+  // Linear happened to return the issues in.
+  if (named && canonical && named.prUrls.some((url) => canonicalPRUrl(url) === canonical)) {
+    return named;
+  }
+
+  const attached = canonical ? index.byPRUrl.get(canonical) : undefined;
+  return attached ?? named;
 }

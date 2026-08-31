@@ -12,8 +12,9 @@ const here = dirname(fileURLToPath(import.meta.url));
 const INDEX = resolve(here, "index.html");
 const SNAPSHOT = process.env.PRTOWER_SNAPSHOT ?? "/data/snapshot.json";
 
-// A refresh costs four GitHub calls per PR, so repeat loads serve the last one
-// unless it is older than this or the client asks for a forced refresh.
+// A refresh costs four GitHub calls per PR, plus a fifth for a PR sharing its
+// repository with another, so repeat loads serve the last one unless it is older
+// than this or the client asks for a forced refresh.
 const FRESH_MS = 15 * 60 * 1000;
 
 // The server refreshes on its own at this interval, so an open board is never

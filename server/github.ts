@@ -113,6 +113,7 @@ async function enrich(token: string, item: SearchItem): Promise<PullRequest> {
 
     base.baseRef = detail.base.ref;
     base.headRef = detail.head.ref;
+    base.headSha = detail.head.sha;
     base.additions = detail.additions;
     base.deletions = detail.deletions;
     base.changedFiles = detail.changed_files;
@@ -184,6 +185,26 @@ async function pooled<T, R>(items: T[], limit: number, task: (item: T) => Promis
   return results;
 }
 
+// A stack is only visible in the commits when the PRs sit in one repository, so
+// a repository holding a single open PR is skipped and costs nothing. The list
+// comes back oldest first, which is the end a parent's commits live at.
+async function addCommits(token: string, prs: PullRequest[]): Promise<void> {
+  const perRepo = new Map<string, PullRequest[]>();
+  for (const pr of prs) {
+    const key = `${pr.owner}/${pr.repo}`;
+    perRepo.set(key, [...(perRepo.get(key) ?? []), pr]);
+  }
+
+  const candidates = [...perRepo.values()].filter((group) => group.length > 1).flat();
+  await pooled(candidates, ENRICH_CONCURRENCY, async (pr) => {
+    const commits = await rest<{ sha: string }[]>(
+      token,
+      `/repos/${pr.owner}/${pr.repo}/pulls/${pr.number}/commits?per_page=100`,
+    ).catch(() => [] as { sha: string }[]);
+    pr.commitShas = commits.map((commit) => commit.sha);
+  });
+}
+
 export async function fetchMyOpenPRs(
   token: string,
   login: string,
@@ -197,11 +218,16 @@ export async function fetchMyOpenPRs(
   );
 
   let done = 0;
-  return pooled(search.items, ENRICH_CONCURRENCY, async (item) => {
+  const prs = await pooled(search.items, ENRICH_CONCURRENCY, async (item) => {
     const pr = await enrich(token, item);
     onProgress?.(++done, search.items.length);
     return pr;
   });
+
+  // A failure here costs the commit-derived stacks and nothing else; the base
+  // branch still names the ones GitHub was told about.
+  await addCommits(token, prs).catch(() => {});
+  return prs;
 }
 
 // Moving a PR in or out of draft is GraphQL-only — REST cannot do either. These

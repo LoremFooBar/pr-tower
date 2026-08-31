@@ -24,6 +24,11 @@ export interface PullRequest {
   draft: boolean;
   baseRef?: string;
   headRef?: string;
+  headSha?: string;
+  // The PR's own commits, oldest first. Only fetched for repositories with more
+  // than one open PR, because its sole purpose is spotting a stack whose PRs
+  // were opened against main rather than against each other.
+  commitShas?: string[];
   additions?: number;
   deletions?: number;
   changedFiles?: number;
@@ -131,6 +136,10 @@ export interface Item {
   unblocks: string[];
   // Set on every PR of a stack, the bottom one included.
   stack?: StackInfo;
+  // The epic at the top of the ticket's chain, when that is not the ticket
+  // itself. Linear nests deeper than one level, so the immediate parent is not
+  // reliably the epic.
+  epicId?: string;
   idleDays: number;
 }
 

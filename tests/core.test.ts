@@ -181,6 +181,77 @@ describe("lanes", () => {
   });
 });
 
+describe("a PR two tickets both claim", () => {
+  const shared = "https://github.com/acme/repo/pull/100";
+
+  it("belongs to the ticket its own title names, whatever the issue order", () => {
+    const parent = issue("ACME-1455", { prUrls: [shared] });
+    const child = issue("ACME-1469", { parentId: "ACME-1455", prUrls: [shared] });
+    const authored = pr({ title: "[ACME-1469] The child's work", url: shared });
+
+    for (const order of [[parent, child], [child, parent]]) {
+      expect(linkPR(authored, buildIssueIndex(order))?.id).toBe("ACME-1469");
+    }
+  });
+
+  it("still takes Linear's attachment when the title names nothing", () => {
+    const parent = issue("ACME-1455", { prUrls: [shared] });
+    const untitled = pr({ title: "A change with no ticket", headRef: "seemingly-random", url: shared });
+
+    expect(linkPR(untitled, buildIssueIndex([parent]))?.id).toBe("ACME-1455");
+  });
+});
+
+describe("nesting", () => {
+  const nested = () => [
+    issue("ACME-288"),
+    issue("ACME-1455", { parentId: "ACME-288" }),
+    issue("ACME-1469", { parentId: "ACME-1455" }),
+    issue("ACME-953", { parentId: "ACME-288" }),
+  ];
+
+  it("puts a grandchild in its epic's bay, not in a bay of its own", () => {
+    const model = buildModel(
+      [pr({ title: "[ACME-1469] Deep" }), pr({ title: "[ACME-953] Shallow" })],
+      nested(),
+    );
+
+    expect(model.bays.map((bay) => bay.key)).toEqual(["ACME-288"]);
+    expect(model.bays[0].tickets.map((ticket) => ticket.key).sort()).toEqual([
+      "ACME-1469",
+      "ACME-953",
+    ]);
+    expect(model.singles).toEqual([]);
+  });
+
+  it("still lets an epic that owns a PR group under itself", () => {
+    const model = buildModel(
+      [pr({ title: "[ACME-288] The epic's own PR" }), pr({ title: "[ACME-953] A child" })],
+      nested(),
+    );
+
+    expect(model.bays.map((bay) => bay.key)).toEqual(["ACME-288"]);
+    expect(model.bays[0].tickets.map((ticket) => ticket.key).sort()).toEqual([
+      "ACME-288",
+      "ACME-953",
+    ]);
+  });
+
+  it("leaves a lone nested PR in the ledger, named for its epic and not its parent", () => {
+    const model = buildModel([pr({ title: "[ACME-1469] Alone under the epic" })], nested());
+
+    expect(model.bays).toEqual([]);
+    expect(model.singles.map((item) => item.issue?.id)).toEqual(["ACME-1469"]);
+    expect(model.singles[0].epicId).toBe("ACME-288");
+  });
+
+  it("calls a top-level ticket its own root, so it carries no epic", () => {
+    const model = buildModel([pr({ title: "[ACME-288] Standalone" })], nested());
+
+    expect(model.singles[0].epicId).toBeUndefined();
+  });
+});
+
 describe("stacks", () => {
   const chain = () => {
     const bottom = pr({ number: 1, headRef: "a", baseRef: "main" });
@@ -227,6 +298,40 @@ describe("stacks", () => {
     expect(found.get(base.id)?.children).toEqual([left, right]);
     expect(found.get(left.id)?.size).toBe(3);
     expect(found.get(right.id)?.parent).toBe(base);
+  });
+
+  it("finds a stack whose PRs were all opened against main", () => {
+    const bottom = pr({ number: 1, headRef: "a", baseRef: "main", headSha: "aaa", commitShas: ["aaa"] });
+    const middle = pr({ number: 2, headRef: "b", baseRef: "main", headSha: "bbb", commitShas: ["aaa", "bbb"] });
+    const top = pr({ number: 3, headRef: "c", baseRef: "main", headSha: "ccc", commitShas: ["aaa", "bbb", "ccc"] });
+
+    const found = stacks([top, middle, bottom]);
+
+    expect(found.get(middle.id)?.parent).toBe(bottom);
+    expect(found.get(top.id)?.parent).toBe(middle);
+    expect(found.get(top.id)?.position).toBe(3);
+  });
+
+  it("does not make two branches at the same commit each other's parent", () => {
+    const one = pr({ number: 1, headRef: "a", baseRef: "main", headSha: "aaa", commitShas: ["zzz", "aaa"] });
+    const two = pr({ number: 2, headRef: "b", baseRef: "main", headSha: "aaa", commitShas: ["zzz", "aaa"] });
+
+    expect(stacks([one, two]).size).toBe(0);
+  });
+
+  it("prefers the base branch over the commits when GitHub was told", () => {
+    const bottom = pr({ number: 1, headRef: "a", baseRef: "main", headSha: "aaa", commitShas: ["aaa"] });
+    const other = pr({ number: 2, headRef: "b", baseRef: "main", headSha: "bbb", commitShas: ["aaa", "bbb"] });
+    const top = pr({ number: 3, headRef: "c", baseRef: "a", headSha: "ccc", commitShas: ["aaa", "bbb", "ccc"] });
+
+    expect(stacks([bottom, other, top]).get(top.id)?.parent).toBe(bottom);
+  });
+
+  it("does not read a stack across repositories from the commits", () => {
+    const one = pr({ repo: "api", headRef: "a", baseRef: "main", headSha: "aaa", commitShas: ["aaa"] });
+    const two = pr({ repo: "web", headRef: "b", baseRef: "main", headSha: "bbb", commitShas: ["aaa", "bbb"] });
+
+    expect(stacks([one, two]).size).toBe(0);
   });
 
   it("does not pair branches of the same name across repositories", () => {

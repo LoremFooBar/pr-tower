@@ -692,5 +692,29 @@
         "type": "unstarted"
       }
     }
-  ]
+  ],
+  "commits": {
+    "acme/worker/77": [
+      "6f21c54d63907893d52c532d52be51e367428f27"
+    ],
+    "acme/worker/81": [
+      "6f21c54d63907893d52c532d52be51e367428f27",
+      "1e519a4ab68d7ae691c8b77bbb61a63c5754e7ee"
+    ],
+    "acme/billing-api/412": [
+      "ba33cebd33f6e549a415bb6c3077d0ad49d8784f"
+    ],
+    "acme/billing-api/418": [
+      "584c3fb9c360940fe53a31c65ca3fced467704df"
+    ],
+    "acme/web/888": [
+      "e47baf6a77444e6d1aea6638fd8d3ddf6c39bfde"
+    ],
+    "acme/web/902": [
+      "78f47506fe072d4c6ea83531e058fb9316407119"
+    ],
+    "acme/web/915": [
+      "4d6790435f25c6499f49e00f42b7a5da0d683c6e"
+    ]
+  }
 }

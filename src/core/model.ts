@@ -54,10 +54,33 @@ export function stacks(prs: PullRequest[]): Map<number, StackInfo> {
     if (pr.headRef) byHead.set(branch(pr, pr.headRef), pr);
   }
 
+  // Second reading, for a stack whose PRs were each opened against main rather
+  // than against each other: one PR's commits already contain another's head
+  // commit. GitHub is never told about that stack, but git knows.
+  const contained = (pr: PullRequest): PullRequest | undefined => {
+    const held = pr.commitShas;
+    if (!held || held.length === 0) return undefined;
+    const shas = new Set(held);
+
+    // In a chain of three the top PR holds both other heads, and only the
+    // nearer one is its parent. More commits means nearer. An equal count is
+    // two branches at the same commit, which is nobody's parent.
+    let nearest: PullRequest | undefined;
+    for (const other of prs) {
+      if (other.id === pr.id || other.owner !== pr.owner || other.repo !== pr.repo) continue;
+      if (!other.headSha || !shas.has(other.headSha)) continue;
+      const depth = other.commitShas?.length ?? 0;
+      if (depth >= held.length) continue;
+      if (!nearest || depth > (nearest.commitShas?.length ?? 0)) nearest = other;
+    }
+    return nearest;
+  };
+
   const parent = new Map<number, PullRequest>();
   const children = new Map<number, PullRequest[]>();
   for (const pr of prs) {
-    const above = pr.baseRef ? byHead.get(branch(pr, pr.baseRef)) : undefined;
+    const declared = pr.baseRef ? byHead.get(branch(pr, pr.baseRef)) : undefined;
+    const above = declared?.id !== pr.id ? (declared ?? contained(pr)) : undefined;
     if (!above || above.id === pr.id) continue;
     parent.set(pr.id, above);
     children.set(above.id, [...(children.get(above.id) ?? []), pr]);
@@ -201,11 +224,35 @@ export function buildModel(
     }
   }
 
+  // A bay belongs to the epic at the top of the chain, not to whatever ticket
+  // happens to sit one level up. Linear nests as deep as you like: grouping by
+  // the immediate parent puts a grandchild in a group of its own, which never
+  // reaches the two PRs a bay needs, so it strands in the singles ledger while
+  // its siblings sit in the epic's bay.
+  const parentOf = new Map(issues.map((issue) => [issue.id, issue.parentId]));
+  const rootOf = (id: string): string => {
+    // Linear will not make a cycle, but one here would hang the page.
+    const seen = new Set<string>([id]);
+    let current = id;
+    for (;;) {
+      const up = parentOf.get(current);
+      if (!up || seen.has(up)) return current;
+      seen.add(up);
+      current = up;
+    }
+  };
+
   const stacked = stacks(prs);
   const items = linked.map(({ pr, issue }) => {
     const item = buildItem(pr, issue, openTickets, issue ? (unblocksMap.get(issue.id) ?? []) : [], now);
     const stack = stacked.get(pr.id);
-    return stack ? { ...item, stack } : item;
+    const key = issue?.id ?? prTicketKey(pr);
+    const root = key ? rootOf(key) : undefined;
+    return {
+      ...item,
+      ...(stack ? { stack } : {}),
+      ...(root && root !== key ? { epicId: root } : {}),
+    };
   });
 
   const byTicket = new Map<string, TicketNode>();
@@ -220,20 +267,23 @@ export function buildModel(
     node.items.push(item);
   }
 
-  // An epic that owns a PR of its own as well as sub-tickets groups under
-  // itself, otherwise its own PR strands in "standalone" while its children
-  // form a separate group under its name.
-  const parentIds = new Set<string>();
-  for (const node of byTicket.values()) {
-    if (node.issue?.parentId) parentIds.add(node.issue.parentId);
+  const rootByKey = new Map<string, string>();
+  for (const key of byTicket.keys()) {
+    if (key !== NO_TICKET) rootByKey.set(key, rootOf(key));
   }
+
+  // How many ticket nodes each epic gathers. An epic that owns a PR as well as
+  // sub-tickets groups under itself; alone, it is standalone work.
+  const gathered = new Map<string, number>();
+  for (const root of rootByKey.values()) gathered.set(root, (gathered.get(root) ?? 0) + 1);
 
   const byGroup = new Map<string, TicketNode[]>();
   for (const [key, node] of byTicket) {
+    const root = rootByKey.get(key);
     let groupKey: string;
     if (key === NO_TICKET) groupKey = NO_TICKET;
-    else if (node.issue?.parentId) groupKey = node.issue.parentId;
-    else if (parentIds.has(key)) groupKey = key;
+    else if (root && root !== key) groupKey = root;
+    else if ((gathered.get(key) ?? 0) > 1) groupKey = key;
     else groupKey = NO_PARENT;
 
     const bucket = byGroup.get(groupKey);
