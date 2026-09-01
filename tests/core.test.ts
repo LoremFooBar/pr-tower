@@ -202,7 +202,37 @@ describe("a PR two tickets both claim", () => {
   });
 });
 
-describe("nesting", () => {
+describe("what earns a bay", () => {
+  const rollup = (live: number, done = 0) => [
+    { parentId: "ACME-288", done, canceled: 0, started: live - done, todo: 0, backlog: 0, live },
+  ];
+  const tree = () => [issue("ACME-288"), issue("ACME-953", { parentId: "ACME-288" })];
+
+  it("gives a real epic its own section on one open PR", () => {
+    const model = buildModel([pr({ title: "[ACME-953] The only one open" })], tree(), rollup(4, 2));
+
+    expect(model.bays.map((bay) => bay.key)).toEqual(["ACME-288"]);
+    expect(model.singles).toEqual([]);
+  });
+
+  it("leaves a parent of one sub-ticket in the ledger", () => {
+    const model = buildModel([pr({ title: "[ACME-953] The only one open" })], tree(), rollup(1));
+
+    expect(model.bays).toEqual([]);
+    expect(model.singles.map((item) => item.issue?.id)).toEqual(["ACME-953"]);
+  });
+
+  it("still earns a bay on two open PRs when no rollup was gathered", () => {
+    const model = buildModel(
+      [pr({ title: "[ACME-953] One" }), pr({ title: "[ACME-954] Two" })],
+      [...tree(), issue("ACME-954", { parentId: "ACME-288" })],
+    );
+
+    expect(model.bays.map((bay) => bay.key)).toEqual(["ACME-288"]);
+  });
+});
+
+describe("nesting", () =>{
   const nested = () => [
     issue("ACME-288"),
     issue("ACME-1455", { parentId: "ACME-288" }),

@@ -336,9 +336,13 @@ export function buildModel(
       peak: groupItems.reduce((highest, item) => Math.max(highest, item.score), 0),
       spine,
       move: nextMove(groupItems),
-      // An epic earns its own section by having more than one open PR. A single
-      // PR of information gets a single row in the ledger instead.
-      bay: Boolean(index.byKey.get(key.toUpperCase())) && groupItems.length > 1,
+      // Two ways to earn a section: more than one open PR, or being a real epic
+      // — more than one live sub-ticket — even when only one of them has a PR
+      // open right now. The second reading needs the rollup, because the tool
+      // never sees a sibling with no open PR.
+      bay:
+        Boolean(index.byKey.get(key.toUpperCase())) &&
+        (groupItems.length > 1 || (rollup?.live ?? 0) > 1),
     });
   }
 

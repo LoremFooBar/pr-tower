@@ -234,12 +234,17 @@ One scrolling page, in this order:
 2. **Bays** — one per epic, ordered by epic priority then id. The order is
    deliberately **stable**: a board kept open all day must not reshuffle between
    glances. Urgency already has a home in the queue.
-3. **Singles ledger** — one-PR epics and standalone tickets, one row each.
+3. **Singles ledger** — standalone tickets and tickets whose parent is not a real
+   epic, one row each.
 4. **No ticket** — tooling PRs, muted, last.
 
-**A bay exists only for an epic with two or more open PRs.** A single PR of
-information costs a single row, so a 1-PR epic never generates as much furniture
-as the 7-PR one. This is `Group.bay` in the model.
+**A bay exists for an epic with two or more open PRs, or for a real epic — one
+with more than one live sub-ticket — even when only one of its PRs is open.**
+The first rule alone hid an epic's own section the moment its PRs landed one at a
+time, which is exactly when the spine showing how much of the effort is left is
+worth reading. The second reading needs the rollup, since a sibling with no open
+PR is invisible to this tool. A parent of a single sub-ticket is not an epic and
+stays a row in the ledger. This is `Group.bay` in the model.
 
 Rows everywhere sort on one ladder (`rung` in `model.ts`): cleared → needs-you →
 waiting → blocked-by-dependency. Blocked sorts *last*, below even the PRs waiting
