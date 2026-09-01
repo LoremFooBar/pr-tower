@@ -1,4 +1,4 @@
-import type { BugbotState, CheckStatus, GitHubUser, PullRequest } from "../src/core/types";
+import type { BugbotState, CheckStatus, GitHubUser, PullRequest, Reviewer } from "../src/core/types";
 
 // Overridable so the end-to-end test can point the real server at a local
 // stand-in for GitHub instead of reaching the internet.
@@ -69,7 +69,7 @@ function bugbotVerdict(runs: CheckRun[]): BugbotState {
   return "success";
 }
 
-async function enrich(token: string, item: SearchItem): Promise<PullRequest> {
+async function enrich(token: string, item: SearchItem, login: string): Promise<PullRequest> {
   const [owner, repo] = item.repository_url.split("/repos/")[1].split("/");
   const base: PullRequest = {
     id: item.id,
@@ -94,7 +94,7 @@ async function enrich(token: string, item: SearchItem): Promise<PullRequest> {
   try {
     const [detail, reviews] = await Promise.all([
       rest<PRDetail>(token, `/repos/${owner}/${repo}/pulls/${item.number}`),
-      rest<{ state: string; user: { login: string } }[]>(
+      rest<{ state: string; user: { login: string; type?: string; avatar_url?: string } }[]>(
         token,
         `/repos/${owner}/${repo}/pulls/${item.number}/reviews?per_page=100`,
       ).catch(() => []),
@@ -110,6 +110,18 @@ async function enrich(token: string, item: SearchItem): Promise<PullRequest> {
     }
     base.approvals = [...latest.values()].filter((state) => state === "APPROVED").length;
     base.changesRequested = [...latest.values()].filter((state) => state === "CHANGES_REQUESTED").length;
+
+    // Anyone who submitted a review, whatever its verdict — GitHub records a
+    // lone inline comment as a review of state COMMENTED, so this is what
+    // "somebody is reading it" looks like. A plain comment in the conversation
+    // box is not a review and does not appear here.
+    const people = new Map<string, string | undefined>();
+    for (const review of reviews) {
+      const who = review.user.login;
+      if (review.user.type === "Bot" || who.endsWith("[bot]") || who === login) continue;
+      if (!people.has(who)) people.set(who, review.user.avatar_url);
+    }
+    base.reviewers = [...people].map(([who, avatar]) => ({ login: who, avatar }));
 
     base.baseRef = detail.base.ref;
     base.headRef = detail.head.ref;
@@ -205,6 +217,67 @@ async function addCommits(token: string, prs: PullRequest[]): Promise<void> {
   });
 }
 
+// Avatars are inlined rather than linked: the page's CSP allows no external
+// image, and one decoration is not worth being the first thing the page fetches
+// from another host. Cached across refreshes by URL, so a returning reviewer
+// costs nothing; the cache is unbounded only in the number of people who have
+// ever reviewed one of your PRs.
+const avatarCache = new Map<string, string>();
+
+// Only GitHub's own avatar host, or whatever stands in for the API in a test.
+// The URL arrives inside an API response, and nothing that comes from outside
+// should be able to point the server at an address of its choosing.
+function avatarAllowed(raw: string): boolean {
+  try {
+    const url = new URL(raw);
+    return url.hostname === "avatars.githubusercontent.com" || raw.startsWith(REST);
+  } catch {
+    return false;
+  }
+}
+
+async function inlineAvatar(raw: string): Promise<string | undefined> {
+  const cached = avatarCache.get(raw);
+  if (cached) return cached;
+  if (!avatarAllowed(raw)) return undefined;
+
+  try {
+    // A 40px render is all a row shows, and s= keeps the payload tiny.
+    const url = new URL(raw);
+    if (!url.searchParams.has("s")) url.searchParams.set("s", "48");
+    const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
+    if (!res.ok) return undefined;
+
+    const type = res.headers.get("content-type") ?? "image/png";
+    if (!type.startsWith("image/")) return undefined;
+    const bytes = Buffer.from(await res.arrayBuffer());
+    // An avatar is a few kB. Anything this large is not one, and the snapshot
+    // is written to disk on every refresh.
+    if (bytes.byteLength > 128 * 1024) return undefined;
+
+    const inlined = `data:${type};base64,${bytes.toString("base64")}`;
+    avatarCache.set(raw, inlined);
+    return inlined;
+  } catch {
+    return undefined;
+  }
+}
+
+async function addAvatars(prs: PullRequest[]): Promise<void> {
+  const wanted = new Map<string, Reviewer[]>();
+  for (const pr of prs) {
+    for (const reviewer of pr.reviewers ?? []) {
+      if (!reviewer.avatar) continue;
+      wanted.set(reviewer.avatar, [...(wanted.get(reviewer.avatar) ?? []), reviewer]);
+    }
+  }
+
+  await pooled([...wanted.keys()], ENRICH_CONCURRENCY, async (raw) => {
+    const inlined = await inlineAvatar(raw);
+    for (const reviewer of wanted.get(raw) ?? []) reviewer.avatar = inlined;
+  });
+}
+
 export async function fetchMyOpenPRs(
   token: string,
   login: string,
@@ -219,14 +292,15 @@ export async function fetchMyOpenPRs(
 
   let done = 0;
   const prs = await pooled(search.items, ENRICH_CONCURRENCY, async (item) => {
-    const pr = await enrich(token, item);
+    const pr = await enrich(token, item, login);
     onProgress?.(++done, search.items.length);
     return pr;
   });
 
-  // A failure here costs the commit-derived stacks and nothing else; the base
-  // branch still names the ones GitHub was told about.
-  await addCommits(token, prs).catch(() => {});
+  // A failure in either costs a decoration or the commit-derived stacks, never
+  // the refresh: the base branch still names the stacks GitHub was told about,
+  // and a reviewer without a picture is still named.
+  await Promise.all([addCommits(token, prs).catch(() => {}), addAvatars(prs).catch(() => {})]);
   return prs;
 }
 

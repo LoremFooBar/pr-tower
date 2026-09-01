@@ -43,6 +43,13 @@ createServer(async (req, res) => {
     return json(res, { data: { [field]: { pullRequest: { number: 1, isDraft: toDraft } } } });
   }
 
+  // The server inlines a reviewer's avatar, and it fetches whatever URL the
+  // review carried — so the fixture points it here rather than at the internet.
+  if (path.startsWith("/avatar/")) {
+    res.writeHead(200, { "content-type": "image/png" });
+    return res.end(readFileSync(resolve(here, "fixture-avatar.png")));
+  }
+
   if (path === "/user") return json(res, fixture.user);
   if (path === "/search/issues") return json(res, { items: fixture.items });
 

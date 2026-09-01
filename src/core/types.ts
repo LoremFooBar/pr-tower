@@ -34,6 +34,10 @@ export interface PullRequest {
   changedFiles?: number;
   approvals: number;
   changesRequested: number;
+  // People other than the author who have submitted a review of any kind,
+  // comments included. Bots are left out: Bugbot's verdict has its own field,
+  // and a bot's remark is not somebody reading your change.
+  reviewers?: Reviewer[];
   checks: CheckStatus;
   failedChecks: string[];
   // Raw GitHub mergeable_state: clean | behind | dirty | blocked | unstable |
@@ -42,6 +46,14 @@ export interface PullRequest {
   mergeState: string;
   bugbot: BugbotState;
   hasCI: boolean;
+}
+
+export interface Reviewer {
+  login: string;
+  // The avatar as a data URI, fetched and inlined by the server. The page's CSP
+  // allows no external image, and adding a host for a decoration would be the
+  // first external request the page ever makes.
+  avatar?: string;
 }
 
 export type LinearStateType =

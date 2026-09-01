@@ -175,6 +175,21 @@ for (const theme of ["dark", "light"]) {
     console.log(`stack badges shown      : ${stackBadges} (want 4)`);
     if (stackBadges < 4) problems.push(`only ${stackBadges} stack badges; a stack went unread`);
 
+    // web #888 carries a comment from dana and one from a bot. Only a person
+    // counts as somebody reading the change.
+    const board = (await page.textContent("#app")) ?? "";
+    console.log(`reviewer named          : ${board.includes("dana") ? "yes" : "NO"}`);
+    if (!board.includes("dana")) problems.push("a PR with a human review named nobody");
+    if (/coderabbit/i.test(board)) problems.push("a bot was reported as a reviewer");
+
+    // The avatar must arrive inlined. An external src would be blocked by the
+    // page's own CSP and show nothing, so this is the assertion that matters.
+    const faces = await page.locator("#app img[src^='data:image/']").count();
+    const external = await page.locator("#app img:not([src^='data:'])").count();
+    console.log(`avatars inlined         : ${faces} (external: ${external})`);
+    if (faces < 1) problems.push("a reviewer's avatar never reached the page");
+    if (external > 0) problems.push("an image on the page points somewhere external");
+
     // Two PRs of ACME-980 are tied together, so exactly one group is bracketed.
     const tied = await page.locator("[data-tied]").count();
     console.log(`tied groups bracketed   : ${tied} (want 1+)`);

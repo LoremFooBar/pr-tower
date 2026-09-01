@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { Item, LinearIssue, StackInfo } from "@/core/types";
+import type { Item, LinearIssue, Reviewer, StackInfo } from "@/core/types";
 import { stripTicketPrefix } from "@/core/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,36 @@ const PRIORITY = ["", "Urgent", "High", "Medium", "Low"];
 
 export function priorityLabel(issue?: LinearIssue): string {
   return issue ? (PRIORITY[issue.priority] ?? "") : "";
+}
+
+// One face is a face; a crowd is a face and a count, so the row keeps its width.
+function Faces({ who }: { who: Reviewer[] }) {
+  const shown = who.slice(0, 3);
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className="inline-flex items-center">
+        {shown.map((reviewer) =>
+          reviewer.avatar ? (
+            <img
+              key={reviewer.login}
+              src={reviewer.avatar}
+              alt=""
+              className="ring-background -ml-1 size-4 rounded-full ring-1 first:ml-0"
+            />
+          ) : (
+            <span
+              key={reviewer.login}
+              aria-hidden
+              className="bg-muted text-muted-foreground ring-background -ml-1 flex size-4 items-center justify-center rounded-full text-[8px] ring-1 first:ml-0"
+            >
+              {reviewer.login.slice(0, 1).toUpperCase()}
+            </span>
+          ),
+        )}
+      </span>
+      {who.length === 1 ? who[0].login : `${who.length} reviewing`}
+    </span>
+  );
 }
 
 /** What the row is waiting on, in one phrase, with the icon that matches it. */
@@ -102,10 +132,14 @@ export function GateDots({ item }: { item: Item }) {
   );
 }
 
-/** Approvals and bot verdict, for a PR already out for review. */
+/** Approvals, who is reading it, and the bot verdict, for a PR out for review. */
 function ReviewState({ item }: { item: Item }) {
   const { pr } = item;
   const missing = pr.bugbot === "none" && pr.hasCI;
+  // Out of draft only says you sent it. Someone's review says a person is
+  // actually reading it, which is the difference between waiting and stalled.
+  // A verdict either way already implies that, so this only speaks up before one.
+  const reading = pr.approvals === 0 && pr.changesRequested === 0 ? (pr.reviewers ?? []) : [];
   return (
     <span className="text-muted-foreground flex items-center gap-1.5 font-mono text-[11px]">
       <span className={pr.approvals > 0 ? "text-[var(--ok)]" : undefined}>
@@ -113,6 +147,11 @@ function ReviewState({ item }: { item: Item }) {
       </span>
       {pr.changesRequested > 0 ? (
         <span className="text-destructive">· {pr.changesRequested} changes</span>
+      ) : null}
+      {reading.length > 0 ? (
+        <span className="text-[var(--wait)] inline-flex items-center gap-1">
+          · <Faces who={reading} />
+        </span>
       ) : null}
       {missing ? <span className="text-[var(--warn)]">· no bot</span> : null}
     </span>

@@ -211,6 +211,24 @@ left-click and post the URL to the extension, which brings the PR up in its
   together, and rows are grouped by ticket — a pair always is, a stack often is
   not, since a stacked PR usually carries its own ticket. That is why a stack
   says its position instead.
+- **Out of draft is not the same as being read.** `reviewers` on a PR is
+  everyone who submitted a review of any kind, the author and every bot removed:
+  GitHub records a lone inline comment as a review of state `COMMENTED`, so this
+  comes free from the reviews call already made. `ReviewState` names them only
+  while there is no approval and no changes requested, because a verdict already
+  implies somebody read it. A plain comment in the conversation box is not a
+  review and does not appear — catching those would cost a call per PR.
+- **A reviewer's avatar is inlined, never linked.** The page's CSP allows no
+  external image, and one decoration is not worth making the page fetch from
+  another host for the first time. The server pulls each distinct avatar at
+  `?s=48`, base64s it into the snapshot, and caches it by URL so a returning
+  reviewer costs nothing. It fetches only `avatars.githubusercontent.com` — or
+  the stand-in API in a test — because the URL arrives inside an API response and
+  nothing from outside should choose an address for the server. `npm run verify`
+  asserts every image on the page is a `data:` URI.
+- **`state()`'s `flight` branch never renders.** A row in that lane, and in
+  `merge`, shows `ReviewState` instead. Put anything about a PR out for review
+  there.
 - **Blocked is not "need you".** A bay's counts separate them; there is nothing
   to do about a blocked PR yet.
 

@@ -228,7 +228,9 @@
       {
         "state": "APPROVED",
         "user": {
-          "login": "reviewer"
+          "login": "reviewer",
+          "type": "User",
+          "avatar_url": "http://localhost:5179/avatar/reviewer.png"
         }
       }
     ],
@@ -239,7 +241,23 @@
     "acme/worker/81": [],
     "acme/infra/240": [],
     "acme/toolbox/12": [],
-    "acme/web/888": []
+    "acme/web/888": [
+      {
+        "state": "COMMENTED",
+        "user": {
+          "login": "dana",
+          "type": "User",
+          "avatar_url": "http://localhost:5179/avatar/dana.png"
+        }
+      },
+      {
+        "state": "COMMENTED",
+        "user": {
+          "login": "coderabbitai[bot]",
+          "type": "Bot"
+        }
+      }
+    ]
   },
   "checkruns": {
     "ba33cebd33f6e549a415bb6c3077d0ad49d8784f": {
