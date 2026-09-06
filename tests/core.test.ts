@@ -202,6 +202,61 @@ describe("a PR two tickets both claim", () => {
   });
 });
 
+describe("the filter", () => {
+  const board = () =>
+    buildModel(
+      [
+        pr({ number: 412, title: "[ACME-100] Add the rollup endpoint", repo: "billing-api" }),
+        pr({ number: 902, title: "[ACME-200] Cache the pricing table", repo: "web" }),
+        pr({ number: 77, title: "No ticket here", repo: "worker" }),
+      ],
+      [issue("ACME-100"), issue("ACME-200")],
+    );
+
+  const shown = (query: string) =>
+    buildModel(
+      board().items.map((item) => item.pr),
+      [issue("ACME-100"), issue("ACME-200")],
+      [],
+      undefined,
+      query,
+    ).items.map((item) => item.pr.number);
+
+  it("matches a title, a repo, a number and a ticket", () => {
+    expect(shown("rollup")).toEqual([412]);
+    expect(shown("web")).toEqual([902]);
+    expect(shown("#77")).toEqual([77]);
+    expect(shown("77")).toEqual([77]);
+    expect(shown("acme-200")).toEqual([902]);
+  });
+
+  it("narrows on a second token rather than widening", () => {
+    expect(shown("cache pricing")).toEqual([902]);
+    expect(shown("cache rollup")).toEqual([]);
+  });
+
+  it("ignores case and surrounding space", () => {
+    expect(shown("  ROLLUP  ")).toEqual([412]);
+  });
+
+  it("shows everything when empty", () => {
+    expect(shown("").sort((a, b) => a - b)).toEqual([77, 412, 902]);
+  });
+
+  it("counts what is hidden, so the header can still say how many there are", () => {
+    const model = buildModel(
+      board().items.map((item) => item.pr),
+      [issue("ACME-100"), issue("ACME-200")],
+      [],
+      undefined,
+      "rollup",
+    );
+
+    expect(model.counts.total).toBe(3);
+    expect(model.counts.shown).toBe(1);
+  });
+});
+
 describe("what earns a bay", () => {
   const rollup = (live: number, done = 0) => [
     { parentId: "ACME-288", done, canceled: 0, started: live - done, todo: 0, backlog: 0, live },

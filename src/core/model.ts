@@ -12,6 +12,7 @@ import type {
 } from "./types";
 import { buildIssueIndex, linkPR, prTicketKey } from "./link";
 import { buildItem } from "./rank";
+import { matchesQuery } from "./search";
 
 const NO_PARENT = " no-parent";
 const NO_TICKET = " no-ticket";
@@ -201,6 +202,7 @@ export function buildModel(
   issues: LinearIssue[],
   rollups: EpicRollup[] = [],
   now = Date.now(),
+  query = "",
 ): Model {
   const byParent = new Map(rollups.map((rollup) => [rollup.parentId, rollup]));
   const index = buildIssueIndex(issues);
@@ -255,8 +257,14 @@ export function buildModel(
     };
   });
 
+  // The search narrows what is shown, never what is known: gates, blockers and
+  // stacks were all worked out above against every open PR, so a PR hidden by a
+  // query still spends the blocker it owns and still anchors its stack.
+  const total = items.length;
+  const visible = query ? items.filter((item) => matchesQuery(item, query)) : items;
+
   const byTicket = new Map<string, TicketNode>();
-  for (const item of items) {
+  for (const item of visible) {
     const key = item.issue?.id ?? prTicketKey(item.pr) ?? NO_TICKET;
     let node = byTicket.get(key);
     if (!node) {
@@ -362,16 +370,16 @@ export function buildModel(
     );
 
   const inBays = new Set(bays.flatMap((group) => group.tickets.flatMap((t) => t.items)));
-  const rest = items.filter((item) => !inBays.has(item));
+  const rest = visible.filter((item) => !inBays.has(item));
   const singles = rest.filter((item) => item.issue || prTicketKey(item.pr)).sort(byLadder);
   const noTicket = rest.filter((item) => !item.issue && !prTicketKey(item.pr)).sort(byLadder);
 
-  const queue = items.filter((item) => item.lane === "send").sort(byLadder);
+  const queue = visible.filter((item) => item.lane === "send").sort(byLadder);
 
   // When nothing is cleared, name the draft that is nearest to it.
   const closest =
     queue.length === 0
-      ? items
+      ? visible
           .filter((item) => item.lane === "held")
           .sort((a, b) => {
             const shut = (item: Item) => item.gates.filter((gate) => !gate.open).length;
@@ -379,10 +387,12 @@ export function buildModel(
           })[0]
       : undefined;
 
-  const counts: Record<string, number> = { total: items.length };
-  for (const item of items) counts[item.lane] = (counts[item.lane] ?? 0) + 1;
+  // total counts every open PR, so the header can still say how many there are
+  // while a query hides most of them.
+  const counts: Record<string, number> = { total, shown: visible.length };
+  for (const item of visible) counts[item.lane] = (counts[item.lane] ?? 0) + 1;
 
-  return { items, bays, singles, noTicket, queue, closest, counts };
+  return { items: visible, bays, singles, noTicket, queue, closest, counts };
 }
 
 

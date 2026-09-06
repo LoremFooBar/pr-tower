@@ -200,6 +200,38 @@ for (const theme of ["dark", "light"]) {
     console.log(`tied groups bracketed   : ${tied} (want 1+)`);
     if (tied < 1) problems.push("a ticket with two PRs drew no tie");
 
+    // The filter narrows the board and leaves the counts honest about the rest.
+    // Rows carry data-pr; a checkbox would only count the releasable ones.
+    const rows = () => page.locator("#app [data-pr]").count();
+    const filter = page.getByLabel("Filter pull requests");
+    const before = await rows();
+
+    await filter.fill("rollup");
+    await page.waitForTimeout(250);
+    const after = await rows();
+    const header = (await page.textContent("header")) ?? "";
+    const tally = /\d+ of \d+/.exec(header)?.[0] ?? "?";
+    console.log(`filter "rollup"         : ${after} of ${before} rows · header "${tally}"`);
+    if (after === 0) problems.push("the filter hid everything, including the match");
+    if (after >= before) problems.push("the filter narrowed nothing");
+    if (tally === "?") problems.push("the header did not say how much is hidden");
+
+    const matched = (await page.textContent("#app")) ?? "";
+    if (!/rollup/i.test(matched)) problems.push("the rows left do not contain the term");
+
+    await filter.fill("zzzzz-no-such-pr");
+    await page.waitForTimeout(250);
+    if (!((await page.textContent("#app")) ?? "").includes("Nothing matches")) {
+      problems.push("a filter matching nothing said nothing");
+    }
+
+    // Escape empties it, and the board comes back whole.
+    await filter.press("Escape");
+    await page.waitForTimeout(250);
+    const restored = await rows();
+    console.log(`filter cleared          : ${restored} rows (was ${before})`);
+    if (restored !== before) problems.push(`clearing left ${restored} rows, not ${before}`);
+
     const server = await (await fetch(`http://localhost:${APP}/api/data`)).json();
     console.log(`server drafts remaining: ${server.prs.filter((pr) => pr.draft).length}`);
 

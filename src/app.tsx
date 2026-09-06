@@ -14,6 +14,7 @@ import {
   type Status,
 } from "@/core/api";
 import { timeAgo } from "@/core/store";
+import { cn } from "@/lib/utils";
 import { stripTicketPrefix } from "@/core/link";
 import type { Item } from "@/core/types";
 import { Setup } from "@/ui/setup";
@@ -32,7 +33,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { Separator } from "@/components/ui/separator";
 import "@/fonts.css";
 import "@/styles.css";
-import { KeyRound, Loader2, RefreshCw, Send, TowerControl } from "lucide-react";
+import { KeyRound, Loader2, RefreshCw, Search, Send, TowerControl, X } from "lucide-react";
 
 const UNDO_MS = 10_000;
 
@@ -59,14 +60,18 @@ function App() {
   const [error, setError] = useState("");
 
   const seenAt = useRef(0);
+  const [query, setQuery] = useState("");
+  const [searching, setSearching] = useState(false);
+  const search = useRef<HTMLInputElement>(null);
 
   const [picked, setPicked] = useState<Set<number>>(new Set());
   const [pending, setPending] = useState<Item[] | null>(null);
   const [busy, setBusy] = useState<Set<number>>(new Set());
 
   const model = useMemo(
-    () => buildModel(snapshot?.prs ?? [], snapshot?.issues ?? [], snapshot?.rollups ?? []),
-    [snapshot],
+    () =>
+      buildModel(snapshot?.prs ?? [], snapshot?.issues ?? [], snapshot?.rollups ?? [], undefined, query),
+    [snapshot, query],
   );
 
   const refresh = useCallback(async (force: boolean) => {
@@ -112,6 +117,25 @@ function App() {
         setLoading(false);
       });
   }, [refresh]);
+
+  // A board you scan all day is worth a keystroke: "/" jumps to the filter and
+  // Escape empties it, the same pair every list on the web answers to.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const typing = target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement;
+      if (event.key === "/" && !typing) {
+        event.preventDefault();
+        search.current?.focus();
+      }
+      if (event.key === "Escape" && target === search.current) {
+        setQuery("");
+        search.current?.blur();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   async function connect(input: ConfigInput) {
     setSetupBusy(true);
@@ -220,6 +244,7 @@ function App() {
   const chosen = model.queue.filter((item) => picked.has(item.pr.id));
   const handlers: Handlers = { picked, onPick: pick, onRelease: setPending, busy };
   const repos = new Set(model.items.map((item) => item.pr.repo)).size;
+  const expanded = searching || query.length > 0;
 
   return (
     <TooltipProvider delayDuration={300}>
@@ -229,10 +254,60 @@ function App() {
           <span className="font-semibold tracking-tight">PR Tower</span>
           {snapshot ? (
             <span className="text-muted-foreground hidden font-mono text-xs sm:inline">
-              {model.items.length} open · {repos} repos · synced {timeAgo(snapshot.at)}
+              {query
+                ? `${model.counts.shown} of ${model.counts.total}`
+                : `${model.counts.total} open`}{" "}
+              · {repos} {repos === 1 ? "repo" : "repos"} · synced {timeAgo(snapshot.at)}
             </span>
           ) : null}
+
           <div className="flex-1" />
+
+          {/* Collapsed it is one glyph, so Sync and Keys keep the right edge
+              they have always had. The input is always mounted rather than
+              swapped in: focus is what opens it, which is the same path the
+              "/" shortcut takes. */}
+          <div
+            className={cn(
+              "relative shrink-0 transition-[width] duration-200 ease-out",
+              expanded ? "w-56 lg:w-72" : "w-8",
+            )}
+            onClick={() => search.current?.focus()}
+          >
+            <Search
+              className={cn(
+                "pointer-events-none absolute top-1/2 left-2 size-4 -translate-y-1/2 transition-colors",
+                expanded ? "text-muted-foreground" : "text-foreground/70",
+              )}
+            />
+            <input
+              ref={search}
+              type="search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              onFocus={() => setSearching(true)}
+              onBlur={() => setSearching(false)}
+              placeholder="Filter by title, #number, repo, ticket"
+              aria-label="Filter pull requests"
+              className={cn(
+                "h-8 w-full rounded-md border pl-8 text-sm outline-none transition-[color,background-color,border-color,box-shadow] [&::-webkit-search-cancel-button]:hidden",
+                expanded
+                  ? "border-input bg-background focus-visible:ring-ring/50 focus-visible:border-ring pr-7 shadow-xs focus-visible:ring-[3px]"
+                  : "cursor-pointer border-transparent bg-transparent placeholder:opacity-0",
+              )}
+            />
+            {query ? (
+              <button
+                type="button"
+                onClick={() => setQuery("")}
+                aria-label="Clear the filter"
+                className="text-muted-foreground hover:text-foreground absolute top-1/2 right-1.5 -translate-y-1/2 rounded-sm p-0.5"
+              >
+                <X className="size-3.5" />
+              </button>
+            ) : null}
+          </div>
+
           <Button
             variant="ghost"
             size="sm"
@@ -268,9 +343,18 @@ function App() {
           </div>
         ) : null}
 
-        {snapshot ? (
+        {snapshot && query && model.items.length === 0 ? (
+          <div className="text-muted-foreground py-20 text-center text-sm">
+            Nothing matches <span className="text-foreground font-mono">{query}</span>.
+          </div>
+        ) : null}
+
+        {snapshot && !(query && model.items.length === 0) ? (
           <>
-            <Queue model={model} handlers={handlers} />
+            {/* While filtering, an empty queue is answering a question nobody
+                asked — the search is about finding a PR, not about what is
+                ready. */}
+            {!query || model.queue.length > 0 ? <Queue model={model} handlers={handlers} /> : null}
 
             {model.bays.length > 0 ? (
               <section className="space-y-3">

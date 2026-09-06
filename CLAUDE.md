@@ -268,6 +268,31 @@ worth reading. The second reading needs the rollup, since a sibling with no open
 PR is invisible to this tool. A parent of a single sub-ticket is not an epic and
 stays a row in the ledger. This is `Group.bay` in the model.
 
+**The filter is always on screen, as one glyph until you use it.** Expanded it
+grows leftwards, so Sync and Keys keep the right edge they have always had. The
+input is mounted the whole time rather than swapped in on click: focus is what
+opens it, which is the same path `/` takes, and it keeps the field findable by
+its label. `matchesQuery`
+(`src/core/search.ts`) tests the title, the repo, `#number`, the ticket and the
+epic; every token has to match, so a second word narrows rather than widens, and
+a leading `#` is dropped because a PR gets written both ways. The branch is
+deliberately not searched: it repeats the ticket key and would otherwise match a
+token no row shows, which reads as a wrong result.
+
+Two things about where it applies:
+
+- **It narrows what is shown, never what is known.** `buildModel` works out
+  gates, blockers and stacks against every open PR and filters only when it
+  starts assembling groups, so a PR hidden by a query still spends the Linear
+  blocker it owns and still anchors its stack.
+- **`counts.total` stays the whole board** while `counts.shown` follows the
+  query, so the header can say `2 of 9` rather than claiming you have two PRs.
+  While a query is active the queue's empty state is hidden: a search is about
+  finding a PR, not about what is ready.
+
+`/` focuses the field and Escape empties it. Rows carry `data-pr`, which is how
+`npm run verify` counts them — a checkbox would only find the releasable ones.
+
 Rows everywhere sort on one ladder (`rung` in `model.ts`): cleared → needs-you →
 waiting → blocked-by-dependency. Blocked sorts *last*, below even the PRs waiting
 on other people, because there is nothing to do about it until the other ticket
