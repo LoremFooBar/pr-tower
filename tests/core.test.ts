@@ -1,7 +1,7 @@
 import { buildModel, stacks } from "../src/core/model";
 import { buildItem, gatesFor, scoreFor } from "../src/core/rank";
 import { canonicalPRUrl, linkPR, buildIssueIndex, prTicketKey, stripTicketPrefix } from "../src/core/link";
-import { resolveChecks } from "../server/github";
+import { latestPerName, resolveChecks } from "../server/github";
 import type { LinearIssue, PullRequest } from "../src/core/types";
 
 const NOW = new Date("2026-08-26T12:00:00Z").getTime();
@@ -743,5 +743,31 @@ describe("resolveChecks", () => {
 
   it("treats a repository with no CI at all as green", () => {
     expect(resolveChecks("pending", 0, 0, false, false)).toBe("success");
+  });
+});
+
+describe("latestPerName", () => {
+  // The real shape from template-runner#606: one workflow triggered three times
+  // on one commit, so three suites each contributed a run of the same name.
+  const runs = [
+    { id: 101353299800, name: "app-client / build-and-publish", status: "completed", conclusion: "success", started_at: "2026-09-05T18:19:22Z" },
+    { id: 101353214168, name: "app-client / build-and-publish", status: "completed", conclusion: "success", started_at: "2026-09-05T18:18:46Z" },
+    { id: 101353212743, name: "app-client / build-and-publish", status: "completed", conclusion: "failure", started_at: "2026-09-05T18:18:46Z" },
+    { id: 101353207610, name: "build-and-push-image / build", status: "completed", conclusion: "success", started_at: "2026-09-05T18:19:48Z" },
+  ];
+
+  it("keeps only the newest run of each name", () => {
+    const kept = latestPerName(runs);
+    expect(kept).toHaveLength(2);
+    expect(kept.find((run) => run.name?.startsWith("app-client"))?.conclusion).toBe("success");
+  });
+
+  it("breaks a tie on start time by id", () => {
+    const tied = runs.filter((run) => run.started_at === "2026-09-05T18:18:46Z");
+    expect(latestPerName(tied)[0].id).toBe(101353214168);
+  });
+
+  it("leaves distinct names alone", () => {
+    expect(latestPerName(runs.slice(0, 1).concat(runs[3]))).toHaveLength(2);
   });
 });

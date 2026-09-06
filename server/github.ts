@@ -56,9 +56,35 @@ interface PRDetail {
 }
 
 interface CheckRun {
+  id?: number;
   name?: string;
   status: string;
   conclusion: string | null;
+  started_at?: string | null;
+}
+
+/**
+ * The check-runs API's `latest` filter dedupes within one check suite, and a
+ * workflow re-triggered on the same commit lands in a suite of its own — so a
+ * superseded failure comes back alongside the passing re-run that replaced it.
+ * GitHub's own PR view keeps only the newest run of each name; without this a
+ * PR reads as failing forever. Ids increase with creation, which breaks the tie
+ * when two runs share a start time.
+ */
+export function latestPerName(runs: CheckRun[]): CheckRun[] {
+  const newest = new Map<string, CheckRun>();
+  for (const run of runs) {
+    const name = run.name ?? "check";
+    const seen = newest.get(name);
+    if (!seen || newer(run, seen)) newest.set(name, run);
+  }
+  return [...newest.values()];
+}
+
+function newer(run: CheckRun, than: CheckRun): boolean {
+  const at = Date.parse(run.started_at ?? "") || 0;
+  const seen = Date.parse(than.started_at ?? "") || 0;
+  return at === seen ? (run.id ?? 0) > (than.id ?? 0) : at > seen;
 }
 
 function bugbotVerdict(runs: CheckRun[]): BugbotState {
@@ -141,17 +167,19 @@ async function enrich(token: string, item: SearchItem, login: string): Promise<P
       ).catch(() => ({ total_count: 0, check_runs: [] as CheckRun[] })),
     ]);
 
-    base.hasCI = status.total_count > 0 || checks.total_count > 0;
-    base.bugbot = bugbotVerdict(checks.check_runs);
-    base.failedChecks = checks.check_runs
+    const runs = latestPerName(checks.check_runs);
+
+    base.hasCI = status.total_count > 0 || runs.length > 0;
+    base.bugbot = bugbotVerdict(runs);
+    base.failedChecks = runs
       .filter((run) => run.conclusion === "failure" || run.conclusion === "timed_out" || run.conclusion === "action_required")
       .map((run) => run.name ?? "check");
 
-    const running = checks.check_runs.some((run) => run.status !== "completed");
+    const running = runs.some((run) => run.status !== "completed");
     base.checks = resolveChecks(
       status.state,
       status.total_count,
-      checks.total_count,
+      runs.length,
       base.failedChecks.length > 0,
       running,
     );
