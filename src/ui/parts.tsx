@@ -132,14 +132,10 @@ export function GateDots({ item }: { item: Item }) {
   );
 }
 
-/** Approvals, who is reading it, and the bot verdict, for a PR out for review. */
+/** Approvals and the bot verdict, for a PR already out for review. */
 function ReviewState({ item }: { item: Item }) {
   const { pr } = item;
   const missing = pr.bugbot === "none" && pr.hasCI;
-  // Out of draft only says you sent it. Someone's review says a person is
-  // actually reading it, which is the difference between waiting and stalled.
-  // A verdict either way already implies that, so this only speaks up before one.
-  const reading = pr.approvals === 0 && pr.changesRequested === 0 ? (pr.reviewers ?? []) : [];
   return (
     <span className="text-muted-foreground flex items-center gap-1.5 font-mono text-[11px]">
       <span className={pr.approvals > 0 ? "text-[var(--ok)]" : undefined}>
@@ -148,14 +144,18 @@ function ReviewState({ item }: { item: Item }) {
       {pr.changesRequested > 0 ? (
         <span className="text-destructive">· {pr.changesRequested} changes</span>
       ) : null}
-      {reading.length > 0 ? (
-        <span className="text-[var(--wait)] inline-flex items-center gap-1">
-          · <Faces who={reading} />
-        </span>
-      ) : null}
       {missing ? <span className="text-[var(--warn)]">· no bot</span> : null}
     </span>
   );
+}
+
+// Someone reads a draft as readily as a PR out for review, so this sits in the
+// row rather than inside ReviewState, which only renders for two of the lanes.
+// A verdict either way already implies a reader, so it speaks up only before one.
+function readers(item: Item): Reviewer[] {
+  const { pr } = item;
+  if (pr.approvals > 0 || pr.changesRequested > 0) return [];
+  return pr.reviewers ?? [];
 }
 
 function stackDetail(stack: StackInfo): string {
@@ -203,10 +203,12 @@ interface RowProps {
 export function Row({ item, picked, onPick, onRelease, busy, paired, eyebrow }: RowProps) {
   const { pr, issue } = item;
   const info = state(item);
+  const reading = readers(item);
   const releasable = item.lane === "send";
 
   return (
     <div
+      data-pr={pr.number}
       className={cn(
         "group flex items-center gap-3 rounded-md px-2 py-2 transition-colors",
         "hover:bg-muted/50",
@@ -270,6 +272,21 @@ export function Row({ item, picked, onPick, onRelease, busy, paired, eyebrow }: 
           {eyebrow ? <span className="truncate">· {eyebrow}</span> : null}
         </div>
       </div>
+
+      {reading.length > 0 ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="text-[var(--wait)] hidden shrink-0 font-mono text-[11px] sm:inline-flex">
+              <Faces who={reading} />
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>
+            {reading.length === 1
+              ? `${reading[0].login} has reviewed this PR`
+              : `${reading.map((who) => who.login).join(", ")} have reviewed this PR`}
+          </TooltipContent>
+        </Tooltip>
+      ) : null}
 
       {item.lane === "flight" || item.lane === "merge" ? (
         <ReviewState item={item} />

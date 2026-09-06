@@ -184,6 +184,11 @@ for (const theme of ["dark", "light"]) {
 
     // The avatar must arrive inlined. An external src would be blocked by the
     // page's own CSP and show nothing, so this is the assertion that matters.
+    // mira reviewed web #902, which is a draft: a reader is worth naming
+    // whether or not the PR has been sent out yet.
+    console.log(`reviewer on a draft     : ${board.includes("mira") ? "yes" : "NO"}`);
+    if (!board.includes("mira")) problems.push("a draft with a human review named nobody");
+
     const faces = await page.locator("#app img[src^='data:image/']").count();
     const external = await page.locator("#app img:not([src^='data:'])").count();
     console.log(`avatars inlined         : ${faces} (external: ${external})`);

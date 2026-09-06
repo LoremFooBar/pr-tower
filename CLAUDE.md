@@ -214,8 +214,8 @@ left-click and post the URL to the extension, which brings the PR up in its
 - **Out of draft is not the same as being read.** `reviewers` on a PR is
   everyone who submitted a review of any kind, the author and every bot removed:
   GitHub records a lone inline comment as a review of state `COMMENTED`, so this
-  comes free from the reviews call already made. `ReviewState` names them only
-  while there is no approval and no changes requested, because a verdict already
+  comes free from the reviews call already made. The row names them only while
+  there is no approval and no changes requested, because a verdict already
   implies somebody read it. A plain comment in the conversation box is not a
   review and does not appear — catching those would cost a call per PR.
 - **A reviewer's avatar is inlined, never linked.** The page's CSP allows no
@@ -226,9 +226,13 @@ left-click and post the URL to the extension, which brings the PR up in its
   the stand-in API in a test — because the URL arrives inside an API response and
   nothing from outside should choose an address for the server. `npm run verify`
   asserts every image on the page is a `data:` URI.
+- **Readers are named on a draft too.** Someone reads a draft as readily as a PR
+  already out for review, so `readers` and the faces live in `Row` rather than in
+  `ReviewState`, which only renders for the `flight` and `merge` lanes. They hold
+  one column across every lane, so the faces can be scanned down the board.
 - **`state()`'s `flight` branch never renders.** A row in that lane, and in
   `merge`, shows `ReviewState` instead. Put anything about a PR out for review
-  there.
+  there, and anything true of every lane in `Row`.
 - **Blocked is not "need you".** A bay's counts separate them; there is nothing
   to do about a blocked PR yet.
 

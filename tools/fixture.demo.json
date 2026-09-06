@@ -235,7 +235,16 @@
       }
     ],
     "acme/billing-api/418": [],
-    "acme/web/902": [],
+    "acme/web/902": [
+      {
+        "state": "COMMENTED",
+        "user": {
+          "login": "mira",
+          "type": "User",
+          "avatar_url": "http://localhost:5179/avatar/mira.png"
+        }
+      }
+    ],
     "acme/web/915": [],
     "acme/worker/77": [],
     "acme/worker/81": [],
