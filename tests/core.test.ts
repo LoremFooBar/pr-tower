@@ -174,6 +174,28 @@ describe("lanes", () => {
     expect(lane({ draft: false, approvals: 1, mergeState: "clean" })).toBe("merge");
   });
 
+  // A base branch moves under an approved PR constantly. Reading only `clean`
+  // dropped it out of the merge lane, which is the one place it belonged.
+  it("keeps an approved PR in the merge lane once its base moves on", () => {
+    expect(lane({ draft: false, approvals: 1, mergeState: "behind" })).toBe("merge");
+  });
+
+  it("merges through a check that is not required", () => {
+    expect(lane({ draft: false, approvals: 1, mergeState: "unstable" })).toBe("merge");
+  });
+
+  it("will not call a conflicting or protected PR mergeable", () => {
+    expect(lane({ draft: false, approvals: 1, mergeState: "dirty" })).toBe("flight");
+    expect(lane({ draft: false, approvals: 1, mergeState: "blocked" })).toBe("flight");
+    expect(lane({ draft: false, approvals: 1, mergeState: "unknown" })).toBe("flight");
+  });
+
+  it("still needs the approval and a green build", () => {
+    expect(lane({ draft: false, approvals: 0, mergeState: "behind" })).toBe("flight");
+    expect(lane({ draft: false, approvals: 1, changesRequested: 1, mergeState: "behind" })).toBe("flight");
+    expect(lane({ draft: false, approvals: 1, checks: "failure", mergeState: "behind" })).toBe("flight");
+  });
+
   it("does not ask for Bugbot on a draft or in a repo with no CI", () => {
     const draft = buildItem(pr({ draft: true, bugbot: "none" }), undefined, new Set(), [], NOW);
     expect(draft.signals.some((s) => s.kind === "no_bot")).toBe(false);

@@ -17,6 +17,15 @@ const IDLE_DAYS = 14;
 // Progress, In Review, Rollout) is consistent with one.
 const DRIFT_STATES = new Set(["backlog", "unstarted", "completed", "canceled"]);
 
+// The `mergeable_state` values GitHub will still merge from. `behind` and
+// `unstable` both qualify: the base has moved on, or a check that is not
+// required is red, and neither stops the merge button — the same reading as the
+// Merge gate, which shuts only on a conflict. Demanding `clean` here hid an
+// approved, green PR from the merge lane the moment anything landed on its base.
+// `blocked` is branch protection refusing, `dirty` is a conflict, and `unknown`
+// is GitHub declining to say, none of which can be called "merge now".
+const MERGEABLE = new Set(["clean", "behind", "unstable", "has_hooks"]);
+
 export function daysBetween(iso: string, now: number): number {
   return Math.floor((now - new Date(iso).getTime()) / 86_400_000);
 }
@@ -94,8 +103,18 @@ export function signalsFor(pr: PullRequest, context: Context, gates: Gate[]): Si
     signals.push({ kind: "no_bot", label: "Bugbot flagged it", detail: "Bugbot reported problems on this commit." });
   }
 
-  if (!pr.draft && pr.approvals > 0 && pr.changesRequested === 0 && pr.checks === "success" && pr.mergeState === "clean") {
-    signals.push({ kind: "merge", label: "Merge now", detail: "Approved, green, and mergeable." });
+  if (
+    !pr.draft &&
+    pr.approvals > 0 &&
+    pr.changesRequested === 0 &&
+    pr.checks === "success" &&
+    MERGEABLE.has(pr.mergeState)
+  ) {
+    signals.push({
+      kind: "merge",
+      label: "Merge now",
+      detail: "Approved, green, and nothing is blocking the merge.",
+    });
   }
 
   if (context.issue && DRIFT_STATES.has(context.issue.stateType)) {
