@@ -4,3 +4,4 @@ shots
 *.local
 .DS_Store
 .verify-state
+.env

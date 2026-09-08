@@ -1,6 +1,11 @@
 services:
   pr-tower:
-    build: .
+    build:
+      context: .
+      args:
+        # Leave unset and the build uses the public registry. Set NPM_REGISTRY
+        # in a .env file beside this one to install through a mirror instead.
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmjs.org/}
     image: pr-tower
     container_name: pr-tower
     restart: unless-stopped

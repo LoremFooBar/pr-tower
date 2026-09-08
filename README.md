@@ -174,17 +174,21 @@ A PR with no ticket is shown in its own group rather than hidden.
 
 ## Development
 
+Requires **pnpm** (`corepack enable pnpm`). The version is pinned in
+`package.json`.
+
 ```bash
-npm run up        # docker compose up -d --build
-npm run logs      # follow the container
-npm run down      # stop it
-npm test          # unit tests: the join, gates, ranking, grouping, token storage
-npm run build     # client bundle + server bundle into dist/
-npm run verify    # full stack, end to end, in a real browser
-npm run fonts     # re-embed the typefaces into src/fonts.css
+pnpm install     # once
+pnpm docker:up   # docker compose up -d --build
+pnpm docker:logs # follow the container
+pnpm docker:down # stop it
+pnpm test        # unit tests: the join, gates, ranking, grouping, token storage
+pnpm build       # client bundle + server bundle into dist/
+pnpm verify      # full stack, end to end, in a real browser
+pnpm fonts       # re-embed the typefaces into src/fonts.css
 ```
 
-`npm run verify` is the one that matters. It starts a stand-in for GitHub and
+`pnpm verify` is the one that matters. It starts a stand-in for GitHub and
 Linear, starts the real server against it, then drives the real page in headless
 Chromium: through the setup screen, every lane, and a completed send. It checks
 that the send reached the server and that no response ever contains a token.
@@ -197,3 +201,20 @@ and is yours to edit.
 
 Fonts are embedded as data URIs, so the page makes no external request and looks
 the same offline. Geist and Geist Mono are OFL licensed.
+
+### Behind a TLS-inspecting proxy
+
+`pnpm-lock.yaml` names no registry — it records only integrity hashes — so the
+same lockfile installs from anywhere. If your network re-signs TLS, the build
+container will not trust `registry.npmjs.org`. Point the build at the mirror
+your proxy does trust:
+
+```bash
+echo 'NPM_REGISTRY=https://your-mirror.example/npm/' > .env
+pnpm docker:up
+```
+
+`.env` is git-ignored. A pre-commit hook (`scripts/normalize-lockfile.sh`)
+rewrites a mirror URL back to `registry.npmjs.org` if one ever reaches a
+lockfile, and refuses the commit if an internal host appears in any other staged
+file.

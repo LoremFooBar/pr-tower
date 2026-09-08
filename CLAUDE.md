@@ -31,7 +31,7 @@ Do not move the tokens back to the client.
 ## Security properties to preserve
 
 - **The browser never receives a token.** `/api/status` reports whether one is
-  set, never its value. `npm run verify` asserts this against both the API and
+  set, never its value. `pnpm verify` asserts this against both the API and
   the served HTML.
 - **Loopback only.** `docker-compose.yml` publishes `127.0.0.1:5178:5178`. The
   API has no login of its own, so exposing it on a LAN would hand it to anyone.
@@ -61,11 +61,11 @@ That costs the single-file property a little, and the CSP two directives:
   be data URIs. `INSTALL_FILES` in `server/index.ts` serves them from a fixed
   map, so no path comes from the request.
 - **`img-src 'self'` and `manifest-src 'self'`** join the policy. Nothing
-  external became reachable; `npm run verify` asserts the policy still carries
+  external became reachable; `pnpm verify` asserts the policy still carries
   `default-src 'none'` and names no host.
-- **Icons are committed, like the fonts.** `npm run icons` renders them from the
+- **Icons are committed, like the fonts.** `pnpm icons` renders them from the
   favicon already inlined in `index.html`, so the mark has one source of truth.
-  It cannot be part of `npm run build`: the image builds with `npm ci`, which
+  It cannot be part of `pnpm build`: the image builds with `pnpm install --frozen-lockfile`, which
   installs no Playwright browser.
 - **`localhost` is enough.** Chromium allows install from `localhost` and
   `127.0.0.1` without HTTPS, so the loopback-only rule is untouched.
@@ -127,7 +127,7 @@ Three things about it:
   for a press; a board that stirs on a timer nobody touched reads as a fault.
 - **Write the SSE headers with a first chunk.** Node holds headers back until
   something is written, so a subscriber cannot tell an open stream from a stalled
-  one until the first `: open` comment arrives. `npm run verify` covers this.
+  one until the first `: open` comment arrives. `pnpm verify` covers this.
 
 `FRESH_MS` still guards client-driven loads, but the five-minute timer means the
 snapshot is rarely old enough for it to matter.
@@ -194,7 +194,7 @@ left-click and post the URL to the extension, which brings the PR up in its
   button keep the browser's own behaviour, and with no extension present nothing
   is intercepted at all.
 - **Both cases are tested, and the second is what makes the first mean
-  anything.** The test browser has no extension, so `npm run verify` clicks a PR
+  anything.** The test browser has no extension, so `pnpm verify` clicks a PR
   link and asserts a tab opens at github.com; it then sets `data-pr-hub="1"` by
   hand and asserts the same click is handed over instead. Without the second
   half, a click going through would prove only that nothing happened to break
@@ -279,7 +279,7 @@ left-click and post the URL to the extension, which brings the PR up in its
   `?s=48`, base64s it into the snapshot, and caches it by URL so a returning
   reviewer costs nothing. It fetches only `avatars.githubusercontent.com` — or
   the stand-in API in a test — because the URL arrives inside an API response and
-  nothing from outside should choose an address for the server. `npm run verify`
+  nothing from outside should choose an address for the server. `pnpm verify`
   asserts every image on the page is a `data:` URI.
 - **Readers are named on a draft too.** Someone reads a draft as readily as a PR
   already out for review, so `readers` and the faces live in `Row` rather than in
@@ -306,7 +306,7 @@ One scrolling page, in this order:
    count, and one release across every epic at once. Expanded, it is a card per
    draft whose three gates are open, ranked by score. When empty it stays a
    sentence naming the draft closest to clearing.
-   Radix drops collapsed content, so anything driving those cards — `npm run
+   Radix drops collapsed content, so anything driving those cards — `pnpm
    verify` included — has to open the section first.
 2. **Bays** — one per epic, ordered by epic priority then id. The order is
    deliberately **stable**: a board kept open all day must not reshuffle between
@@ -371,7 +371,7 @@ Three things about where the filter applies:
 That last one deliberately takes find-in-page away from this page: on a board of
 rows, the app's own filter is what answers "where is that PR", and the browser's
 would only find the text already on screen. Rows carry `data-pr` and chips carry
-`data-stage`, which is how `npm run verify` counts them — a checkbox would only
+`data-stage`, which is how `pnpm verify` counts them — a checkbox would only
 find the releasable ones.
 
 Rows everywhere sort on one ladder (`rung` in `model.ts`): cleared → needs-you →
@@ -395,7 +395,7 @@ Two things are held outside the shadcn palette on purpose, in `src/styles.css`:
 
 - `--ok`, `--warn`, `--wait`, `--done` carry *work state*. A theme change must
   not silently repaint the meaning of a row.
-- The embedded fonts (Geist, Geist Mono) come from `npm run fonts`, so the page
+- The embedded fonts (Geist, Geist Mono) come from `pnpm fonts`, so the page
   still makes no external request. The favicon is an inline SVG data URI in
   `index.html` for the same reason: the CSP would refuse to fetch a file.
 
@@ -406,7 +406,7 @@ and the done cells depend on the rollup query.
 
 ## Testing
 
-`npm test` covers the pure core and token storage. `npm run verify` is the
+`pnpm test` covers the pure core and token storage. `pnpm verify` is the
 important one: it starts `tools/mock-upstream.mjs` in place of GitHub and Linear,
 starts the **real** `dist/server.js` against it, then drives the **real** page in
 headless Chromium — setup screen, every lane, a completed send — and asserts the

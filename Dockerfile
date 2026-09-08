@@ -2,10 +2,18 @@
 # files they produce — the runtime image carries no node_modules and no source.
 FROM node:24-alpine AS build
 WORKDIR /app
-COPY package.json package-lock.json ./
-RUN npm ci
+
+# pnpm's lockfile records integrity hashes and names no registry, so one
+# argument redirects the whole install. Behind a proxy that re-signs TLS, point
+# this at the mirror that proxy trusts: the container has no corporate CA, so
+# registry.npmjs.org fails there with UNABLE_TO_GET_ISSUER_CERT_LOCALLY.
+ARG NPM_REGISTRY=https://registry.npmjs.org/
+RUN npm config set registry "$NPM_REGISTRY" && npm install -g pnpm@10.20.0
+
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm config set registry "$NPM_REGISTRY" && pnpm install --frozen-lockfile
 COPY . .
-RUN npm run build
+RUN pnpm build
 
 FROM node:24-alpine
 WORKDIR /app

@@ -4,3 +4,4 @@ shots
 .git
 *.local
 .DS_Store
+.env
