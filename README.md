@@ -49,6 +49,32 @@ its epic named inline. Tooling PRs with no ticket sit muted at the bottom.
 Rows sort the same way everywhere: cleared, then what needs you, then what is
 waiting on other people, then what is blocked by another ticket.
 
+## Finding things
+
+A strip of **stage chips** sits above the queue, each with a count:
+
+```
+● to merge 1   ● ready 3   ● need you 3   ● in review 1   ○ blocked 1
+```
+
+Click one to narrow the board to that stage; click a second to see both. None
+picked is the whole board. They are filters, not tabs — the page underneath does
+not change, and the header keeps saying `4 of 9` so you always know what is
+hidden.
+
+The text filter next to Sync searches the title, the repo, `#number`, the ticket
+and the epic. Every word has to match, so a second word narrows the result.
+
+| Key | Does |
+|---|---|
+| `/` | Jump to the text filter |
+| `Cmd`/`Ctrl` + `F` | Open the text filter, or close it again |
+| `Esc` | Empty the text filter |
+
+`Cmd+F` replaces the browser's find-in-page on this page. That is deliberate: the
+browser can only find text already on screen, while this filter searches every PR
+on the board.
+
 Order is by how much a PR matters, and the chips on each card are the entire
 calculation, so you can disagree with it:
 
@@ -79,6 +105,31 @@ to draft. After that, do it on GitHub.
 
 The release button is the only thing on the page painted in the accent colour. If
 there is no magenta on screen, there is nothing to release.
+
+## Desktop notifications
+
+Click the bell in the header once and allow notifications. After that a comment
+on one of your PRs raises a desktop notification, and clicking it opens the
+comment.
+
+Two authors get through, and nothing else:
+
+- **Bugbot**, so a finding on a PR you have already sent out reaches you.
+- **A person** — anyone who is not a bot and is not you.
+
+Every other bot is silent: a walkthrough posted by a review bot is not somebody
+asking you for something. Your own comments are silent too.
+
+All of an author's new comments on one PR arrive as a single notification saying
+how many, so a review left as five inline notes wakes you once. A conversation
+comment, an inline note and a review submitted with a message all count.
+
+The bell mutes for the rest of the session; a reload turns it back on, because
+the app stores nothing in the browser. To stop them for good, withdraw the
+permission in your browser's site settings.
+
+The first refresh after a start sets the baseline and announces nothing, so
+opening the board does not replay a conversation you have already read.
 
 ## Setup
 

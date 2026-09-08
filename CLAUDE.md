@@ -103,6 +103,7 @@ src/core/     pure logic, all unit tested, runs in the browser
   rank.ts     gates, signals, and the importance score
   model.ts    buildModel: PRs to tickets to parent epics, plus the send queue
   api.ts      the client's only outside contact — this app's own backend
+  notify.ts   comment arrivals to desktop notification wording
   store.ts    a date helper; the browser stores nothing
 src/ui/       Preact components
 tools/        font embedding, the mock upstream, the verification harness
@@ -131,6 +132,53 @@ Three things about it:
 `FRESH_MS` still guards client-driven loads, but the five-minute timer means the
 snapshot is rarely old enough for it to matter.
 
+## Desktop notifications
+
+A comment on one of the user's PRs raises a desktop notification. Two authors
+qualify and no others: **Bugbot**, and **a person** — anything with `type: "Bot"`
+or a `[bot]` login is dropped, and so is the user themselves. Every other bot
+posts walkthroughs and summaries nobody asked for, and a board that cries wolf
+gets its permission withdrawn.
+
+- **`authorKind` is the whole policy** (`server/github.ts`). `cursor[bot]` is
+  anchored so a person named `cursor` stays a person; `bugbot` is matched loosely
+  because that account has been renamed once already.
+- **Three surfaces, one shape.** A remark lives as a conversation comment, an
+  inline note, or the body of a submitted review. The first two come from
+  per-repository endpoints; the third exists *only* on `/pulls/N/reviews`, which
+  is already fetched, so leaving it out would let "changes requested: please fix
+  X" arrive silently. All three are mapped onto `RawComment`.
+- **The id must carry its surface.** The three are separate sequences at GitHub,
+  so `1234` can name a review and an inline note; keyed on the number alone, one
+  of them is never announced.
+- **The sweep is per repository, not per PR.** `/repos/o/r/issues/comments` and
+  `/repos/o/r/pulls/comments` cost two calls whether the repository holds one
+  open PR or twenty. This is why the app can afford comments at all — the row's
+  reviewer list deliberately does not read them.
+- **The cursor is compared against `created_at`, though the API filters on
+  `updated_at`.** An edited old comment comes back looking fresh, and announcing
+  it would claim something new was said.
+- **One arrival per author per PR.** A review left as a message plus four inline
+  notes is one thing that happened; the notification says `(5)`. The alert's id
+  is the newest member's, so the link lands on the latest remark.
+- **The first refresh announces nothing.** With no `commentsSince` there is no
+  sweep at all, only a baseline — otherwise a fresh container shouts every
+  comment already on the board. `commentsSeen` carries the announced keys across
+  refreshes, and lives in the snapshot so a restart does not repeat itself.
+  Neither field is sent to the page.
+- **The page's first snapshot is also a baseline.** It arrives carrying the last
+  refresh's alerts, which on a reload is a conversation already read.
+- **Alerts ride on `/api/data`, not on the stream.** The event still carries a
+  timestamp and nothing else.
+- **No service worker, on purpose.** `new Notification` from the page is enough
+  on desktop; `showNotification` is only required on Android. The icon is
+  `/icon-192.png` because same-origin is all `img-src 'self'` allows.
+- **Two open windows raise one notification.** The alert id is the notification
+  `tag`, so the operating system replaces rather than stacks.
+- **The mute lasts for the session.** The browser's permission is the switch that
+  survives a reload; the bell is an in-page toggle, because the browser stores
+  nothing.
+
 ## Opening a PR in Chrome
 
 A PR link is a real `<a href>` to github.com and stays one. When the PR Hub
@@ -145,6 +193,12 @@ left-click and post the URL to the extension, which brings the PR up in its
 - **Modified clicks are left alone.** Cmd/Ctrl/Shift/Alt and any non-primary
   button keep the browser's own behaviour, and with no extension present nothing
   is intercepted at all.
+- **Both cases are tested, and the second is what makes the first mean
+  anything.** The test browser has no extension, so `npm run verify` clicks a PR
+  link and asserts a tab opens at github.com; it then sets `data-pr-hub="1"` by
+  hand and asserts the same click is handed over instead. Without the second
+  half, a click going through would prove only that nothing happened to break
+  it. `tests/core.test.ts` covers `prLink` itself, modified clicks included.
 
 ## Domain rules worth keeping
 
@@ -217,7 +271,8 @@ left-click and post the URL to the extension, which brings the PR up in its
   comes free from the reviews call already made. The row names them only while
   there is no approval and no changes requested, because a verdict already
   implies somebody read it. A plain comment in the conversation box is not a
-  review and does not appear — catching those would cost a call per PR.
+  review and does not appear on the row; it is read only by the comment sweep,
+  which pays per repository rather than per PR.
 - **A reviewer's avatar is inlined, never linked.** The page's CSP allows no
   external image, and one decoration is not worth making the page fetch from
   another host for the first time. The server pulls each distinct avatar at
@@ -279,19 +334,45 @@ a leading `#` is dropped because a PR gets written both ways. The branch is
 deliberately not searched: it repeats the ticket key and would otherwise match a
 token no row shows, which reads as a wrong result.
 
-Two things about where it applies:
+**The stage chips are the other half of the same filter.** A strip above the
+queue — `to merge · ready · need you · in review · blocked`, each with a count.
+
+- **They are toggles, not tabs, and that distinction is the whole reason they
+  are allowed.** Nothing picked is the whole board, and picking a second chip
+  *widens* the result. Tabs were rejected because they made readiness the
+  navigation axis and hid everything else; these narrow a page that is otherwise
+  unchanged, exactly as the text filter does.
+- **`stageOf` (`src/core/rank.ts`) is the only definition.** The chips, the bay
+  header counts and the spine all read it, so the three can never disagree. It
+  is a reading of the lane and the signals: `lane` says what the app can do with
+  a PR, a stage says what the reader is waiting for. Blocked is pulled out of
+  `held` for the same reason a bay's counts separate them.
+- **The spine is one step coarser** — `merge` and `ready` are both `cleared`
+  there, because the spine answers "how much of this effort is left", not "which
+  button do I press".
+- **A chip's count is taken before the stage filter** and after the text one, so
+  turning one chip on does not zero the rest, and typing a query does re-count
+  them.
+
+Three things about where the filter applies:
 
 - **It narrows what is shown, never what is known.** `buildModel` works out
   gates, blockers and stacks against every open PR and filters only when it
-  starts assembling groups, so a PR hidden by a query still spends the Linear
+  starts assembling groups, so a PR hidden by the filter still spends the Linear
   blocker it owns and still anchors its stack.
 - **`counts.total` stays the whole board** while `counts.shown` follows the
-  query, so the header can say `2 of 9` rather than claiming you have two PRs.
-  While a query is active the queue's empty state is hidden: a search is about
-  finding a PR, not about what is ready.
+  filter, so the header can say `2 of 9` rather than claiming you have two PRs.
+  While anything is filtered the queue's empty state is hidden: a filter is
+  about finding a PR, not about what is ready.
+- **The two parts combine.** A query and a stage narrow together; the empty state
+  names whichever is on.
 
-`/` focuses the field and Escape empties it. Rows carry `data-pr`, which is how
-`npm run verify` counts them — a checkbox would only find the releasable ones.
+`/` focuses the field, Escape empties it, and **Cmd/Ctrl+F opens and closes it**.
+That last one deliberately takes find-in-page away from this page: on a board of
+rows, the app's own filter is what answers "where is that PR", and the browser's
+would only find the text already on screen. Rows carry `data-pr` and chips carry
+`data-stage`, which is how `npm run verify` counts them — a checkbox would only
+find the releasable ones.
 
 Rows everywhere sort on one ladder (`rung` in `model.ts`): cleared → needs-you →
 waiting → blocked-by-dependency. Blocked sorts *last*, below even the PRs waiting

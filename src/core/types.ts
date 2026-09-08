@@ -48,6 +48,29 @@ export interface PullRequest {
   hasCI: boolean;
 }
 
+// Who wrote a comment, as far as this app cares. Every other bot is dropped, so
+// "bot" is not one of these: a bot's remark is noise unless it is Bugbot's.
+export type CommentKind = "bugbot" | "person";
+
+// One author's new comments on one PR, collapsed into a single arrival: a review
+// carrying a body plus three inline notes is one thing that happened, not four.
+export interface CommentAlert {
+  /** The newest comment of the group, surface-qualified. Stable across refreshes. */
+  id: string;
+  prId: number;
+  repo: string;
+  number: number;
+  title: string;
+  /** The newest comment itself, not the PR. */
+  url: string;
+  author: string;
+  kind: CommentKind;
+  count: number;
+  /** The newest comment's text, flattened and clipped. */
+  excerpt: string;
+  at: string;
+}
+
 export interface Reviewer {
   login: string;
   // The avatar as a data URI, fetched and inlined by the server. The page's CSP
@@ -135,6 +158,14 @@ export type Lane =
   | "merge" // approved and mergeable
   | "quiet"; // draft with nothing wrong, just not moving
 
+/**
+ * The stage a PR is at, in the words the bay counts and the spine already use.
+ * Derived from the lane and the signals rather than stored: `lane` says what the
+ * app can do with a PR, a stage says what the reader is waiting for. Blocked is
+ * torn out of `held` because there is nothing to do about it yet.
+ */
+export type Stage = "merge" | "ready" | "needs" | "review" | "blocked";
+
 export interface Item {
   pr: PullRequest;
   issue?: LinearIssue;
@@ -192,6 +223,8 @@ export interface Group {
   repos: number;
   /** How many of the open PRs in this group sit in each lane. */
   lanes: Record<Lane, number>;
+  /** The same PRs counted by stage, which is what the header line names. */
+  stages: Record<Stage, number>;
   /** Sub-ticket counts across the whole parent, closed ones included. */
   rollup?: EpicRollup;
   /** Set when every open PR in the group is waiting on the same ticket. */

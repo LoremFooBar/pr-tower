@@ -1,4 +1,4 @@
-import type { EpicRollup, LinearIssue, PullRequest } from "./types";
+import type { CommentAlert, EpicRollup, LinearIssue, PullRequest } from "./types";
 
 // The browser never holds a token. Every call goes to this app's own backend,
 // which attaches the credentials it keeps inside the container.
@@ -18,6 +18,8 @@ export interface Data {
   rollups: EpicRollup[];
   at: number;
   login: string;
+  /** Comments that arrived during the refresh that built this snapshot. */
+  alerts: CommentAlert[];
 }
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {

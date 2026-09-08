@@ -6,6 +6,7 @@ import type {
   PullRequest,
   ScorePart,
   Signal,
+  Stage,
 } from "./types";
 
 // A PR with no movement for this long has stopped being work in progress and
@@ -171,6 +172,14 @@ function laneFor(pr: PullRequest, ready: boolean, signals: Signal[]): Lane {
   if (!pr.draft) return "flight";
   if (!ready) return "held";
   return "send";
+}
+
+export function stageOf(item: Item): Stage {
+  if (item.lane === "merge") return "merge";
+  if (item.lane === "send") return "ready";
+  if (item.lane === "flight") return "review";
+  if (item.signals.some((signal) => signal.kind === "blocked")) return "blocked";
+  return "needs";
 }
 
 export function buildItem(

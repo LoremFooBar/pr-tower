@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Group, Item, SpineCell } from "@/core/types";
+import type { Group, Item, SpineCell, Stage } from "@/core/types";
 import type { Model } from "@/core/model";
 import { stripTicketPrefix } from "@/core/link";
 import { Badge } from "@/components/ui/badge";
@@ -36,6 +36,93 @@ const CELL_NAME: Record<SpineCell, string> = {
   waiting: "in review",
   blocked: "blocked",
 };
+
+// The five stages, in the order of the ladder every list sorts on, and in the
+// words the bay header already counts them with.
+const STAGE_ORDER: Stage[] = ["merge", "ready", "needs", "review", "blocked"];
+
+export const STAGE_LABEL: Record<Stage, string> = {
+  merge: "to merge",
+  ready: "ready",
+  needs: "need you",
+  review: "in review",
+  blocked: "blocked",
+};
+
+// Said as a sentence rather than as a tally, for the empty state.
+export const STAGE_PROSE: Record<Stage, string> = {
+  merge: "ready to merge",
+  ready: "ready to release",
+  needs: "waiting on you",
+  review: "in review",
+  blocked: "blocked",
+};
+
+// The same colours the spine uses, so a chip and a cell read as one vocabulary.
+const STAGE_DOT: Record<Stage, string> = {
+  merge: "bg-[var(--ok)]",
+  ready: "bg-primary",
+  needs: "bg-destructive",
+  review: "bg-[var(--wait)]",
+  blocked: "ring-muted-foreground/60 ring-1 ring-inset",
+};
+
+/**
+ * Toggles, not tabs: none picked is the whole board, and picking two widens
+ * rather than navigates. The counts are of everything the text filter leaves,
+ * so turning one chip on does not zero the rest.
+ */
+export function Stages({
+  counts,
+  picked,
+  onToggle,
+  onClear,
+}: {
+  counts: Record<Stage, number>;
+  picked: Set<Stage>;
+  onToggle(stage: Stage): void;
+  onClear(): void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {STAGE_ORDER.map((stage) => {
+        const on = picked.has(stage);
+        const count = counts[stage];
+        return (
+          <button
+            key={stage}
+            type="button"
+            data-stage={stage}
+            aria-pressed={on}
+            disabled={count === 0 && !on}
+            onClick={() => onToggle(stage)}
+            className={cn(
+              "flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors",
+              on
+                ? "border-foreground/25 bg-muted text-foreground font-medium"
+                : "text-muted-foreground hover:bg-muted/50 border-transparent",
+              count === 0 && !on && "opacity-40 hover:bg-transparent",
+            )}
+          >
+            <span className={cn("size-1.5 shrink-0 rounded-full", STAGE_DOT[stage])} />
+            {STAGE_LABEL[stage]}
+            <span className="font-mono tabular-nums">{count}</span>
+          </button>
+        );
+      })}
+      {picked.size > 0 ? (
+        <button
+          type="button"
+          data-stage-clear
+          onClick={onClear}
+          className="text-muted-foreground hover:text-foreground ml-1 rounded-md px-1.5 py-1 text-xs underline-offset-4 hover:underline"
+        >
+          Clear
+        </button>
+      ) : null}
+    </div>
+  );
+}
 
 /** One cell per sub-issue, read left to right: the shape of the whole effort. */
 function Spine({ cells }: { cells: SpineCell[] }) {
@@ -207,17 +294,12 @@ export function Bay({
   const rows = tickets.flat();
   const cleared = rows.filter((item) => item.lane === "send");
   const priority = priorityLabel(group.epic);
-  const blocked = rows.filter((item) =>
-    item.signals.some((signal) => signal.kind === "blocked"),
-  ).length;
 
   const counts = [
     group.rollup ? `${group.rollup.done}/${group.rollup.live} done` : null,
-    group.lanes.merge ? `${group.lanes.merge} to merge` : null,
-    group.lanes.send ? `${group.lanes.send} ready` : null,
-    group.lanes.held - blocked > 0 ? `${group.lanes.held - blocked} need you` : null,
-    group.lanes.flight ? `${group.lanes.flight} in review` : null,
-    blocked ? `${blocked} blocked` : null,
+    ...STAGE_ORDER.filter((stage) => group.stages[stage] > 0).map(
+      (stage) => `${group.stages[stage]} ${STAGE_LABEL[stage]}`,
+    ),
   ]
     .filter(Boolean)
     .join(" · ");

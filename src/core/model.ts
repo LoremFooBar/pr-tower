@@ -8,11 +8,12 @@ import type {
   PullRequest,
   SpineCell,
   StackInfo,
+  Stage,
   TicketNode,
 } from "./types";
 import { buildIssueIndex, linkPR, prTicketKey } from "./link";
-import { buildItem } from "./rank";
-import { matchesQuery } from "./search";
+import { buildItem, stageOf } from "./rank";
+import { matchesQuery, matchesStages } from "./search";
 
 const NO_PARENT = " no-parent";
 const NO_TICKET = " no-ticket";
@@ -134,11 +135,23 @@ export function stacks(prs: PullRequest[]): Map<number, StackInfo> {
   return info;
 }
 
+// The spine is coarser than the stage chips by one step: a PR to merge and a PR
+// to release are both work that has come through, and the spine is about how
+// much of the effort is left rather than which button to press.
+const SPINE_OF: Record<Stage, SpineCell> = {
+  merge: "cleared",
+  ready: "cleared",
+  needs: "needs",
+  review: "waiting",
+  blocked: "blocked",
+};
+
 function cellFor(item: Item): SpineCell {
-  if (item.lane === "send" || item.lane === "merge") return "cleared";
-  if (item.lane === "flight") return "waiting";
-  if (item.signals.some((signal) => signal.kind === "blocked")) return "blocked";
-  return "needs";
+  return SPINE_OF[stageOf(item)];
+}
+
+function emptyStages(): Record<Stage, number> {
+  return { merge: 0, ready: 0, needs: 0, review: 0, blocked: 0 };
 }
 
 // Highest leverage first. Merging something approved beats releasing a draft,
@@ -195,6 +208,11 @@ export interface Model {
   /** When the queue is empty, the draft closest to clearing. */
   closest?: Item;
   counts: Record<string, number>;
+  /**
+   * Per stage, counted over everything the text query leaves — deliberately
+   * before the stage filter, so picking one chip does not zero the others.
+   */
+  stageCounts: Record<Stage, number>;
 }
 
 export function buildModel(
@@ -203,6 +221,7 @@ export function buildModel(
   rollups: EpicRollup[] = [],
   now = Date.now(),
   query = "",
+  stages: readonly Stage[] = [],
 ): Model {
   const byParent = new Map(rollups.map((rollup) => [rollup.parentId, rollup]));
   const index = buildIssueIndex(issues);
@@ -257,11 +276,17 @@ export function buildModel(
     };
   });
 
-  // The search narrows what is shown, never what is known: gates, blockers and
+  // The filter narrows what is shown, never what is known: gates, blockers and
   // stacks were all worked out above against every open PR, so a PR hidden by a
   // query still spends the blocker it owns and still anchors its stack.
   const total = items.length;
-  const visible = query ? items.filter((item) => matchesQuery(item, query)) : items;
+  const matched = query ? items.filter((item) => matchesQuery(item, query)) : items;
+  const visible = stages.length
+    ? matched.filter((item) => matchesStages(item, stages))
+    : matched;
+
+  const stageCounts = emptyStages();
+  for (const item of matched) stageCounts[stageOf(item)]++;
 
   const byTicket = new Map<string, TicketNode>();
   for (const item of visible) {
@@ -310,7 +335,11 @@ export function buildModel(
         a.key.localeCompare(b.key, undefined, { numeric: true }),
     );
     const lanes: Record<Lane, number> = { send: 0, held: 0, flight: 0, merge: 0, quiet: 0 };
-    for (const item of groupItems) lanes[item.lane]++;
+    const stageTally = emptyStages();
+    for (const item of groupItems) {
+      lanes[item.lane]++;
+      stageTally[stageOf(item)]++;
+    }
 
     const rollup = byParent.get(key);
     // Done cells come from the rollup, which counts siblings this tool never
@@ -339,6 +368,7 @@ export function buildModel(
       count: groupItems.length,
       repos: new Set(groupItems.map((item) => `${item.pr.owner}/${item.pr.repo}`)).size,
       lanes,
+      stages: stageTally,
       rollup,
       blockedOn,
       peak: groupItems.reduce((highest, item) => Math.max(highest, item.score), 0),
@@ -392,7 +422,7 @@ export function buildModel(
   const counts: Record<string, number> = { total, shown: visible.length };
   for (const item of visible) counts[item.lane] = (counts[item.lane] ?? 0) + 1;
 
-  return { items: visible, bays, singles, noTicket, queue, closest, counts };
+  return { items: visible, bays, singles, noTicket, queue, closest, counts, stageCounts };
 }
 
 

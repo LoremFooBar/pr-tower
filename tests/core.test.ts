@@ -1,8 +1,11 @@
 import { buildModel, stacks } from "../src/core/model";
-import { buildItem, gatesFor, scoreFor } from "../src/core/rank";
+import { buildItem, gatesFor, scoreFor, stageOf } from "../src/core/rank";
 import { canonicalPRUrl, linkPR, buildIssueIndex, prTicketKey, stripTicketPrefix } from "../src/core/link";
-import { latestPerName, resolveChecks } from "../server/github";
-import type { LinearIssue, PullRequest } from "../src/core/types";
+import { authorKind, groupComments, latestPerName, resolveChecks } from "../server/github";
+import type { RawComment } from "../server/github";
+import { noticeFor, unseen } from "../src/core/notify";
+import { prLink } from "../src/lib/prhub";
+import type { CommentAlert, LinearIssue, PullRequest, Stage } from "../src/core/types";
 
 const NOW = new Date("2026-08-26T12:00:00Z").getTime();
 
@@ -254,6 +257,101 @@ describe("the filter", () => {
 
     expect(model.counts.total).toBe(3);
     expect(model.counts.shown).toBe(1);
+  });
+});
+
+describe("stages", () => {
+  // One PR at each of the five stages, all in one board so the counts add up.
+  const prs = () => [
+    pr({ number: 1, title: "[ACME-1] Ready", draft: true }),
+    pr({ number: 2, title: "[ACME-2] Needs you", draft: true, checks: "failure", failedChecks: ["lint"] }),
+    pr({ number: 3, title: "[ACME-3] In review", draft: false, bugbot: "success" }),
+    pr({ number: 4, title: "[ACME-4] To merge", draft: false, approvals: 1, bugbot: "success" }),
+    pr({ number: 5, title: "[ACME-5] Blocked", draft: true }),
+  ];
+  const issues = () => [
+    issue("ACME-1"),
+    issue("ACME-2"),
+    issue("ACME-3"),
+    issue("ACME-4"),
+    issue("ACME-5", { blockedBy: ["ACME-1"] }),
+  ];
+
+  const at = (stages: Stage[]) =>
+    buildModel(prs(), issues(), [], NOW, "", stages)
+      .items.map((item) => item.pr.number)
+      .sort((a, b) => a - b);
+
+  it("reads one stage off every lane", () => {
+    const model = buildModel(prs(), issues(), [], NOW);
+    const byNumber = new Map(model.items.map((item) => [item.pr.number, stageOf(item)]));
+    expect(byNumber.get(1)).toBe("ready");
+    expect(byNumber.get(2)).toBe("needs");
+    expect(byNumber.get(3)).toBe("review");
+    expect(byNumber.get(4)).toBe("merge");
+    expect(byNumber.get(5)).toBe("blocked");
+  });
+
+  it("tells blocked apart from needs you, because there is nothing to do yet", () => {
+    expect(at(["needs"])).toEqual([2]);
+    expect(at(["blocked"])).toEqual([5]);
+  });
+
+  it("widens on a second stage rather than narrowing", () => {
+    expect(at(["ready", "merge"])).toEqual([1, 4]);
+  });
+
+  it("shows the whole board when nothing is picked", () => {
+    expect(at([])).toEqual([1, 2, 3, 4, 5]);
+  });
+
+  it("keeps the total honest about what is hidden", () => {
+    const model = buildModel(prs(), issues(), [], NOW, "", ["review"]);
+    expect(model.counts.total).toBe(5);
+    expect(model.counts.shown).toBe(1);
+  });
+
+  it("counts every stage even while one is picked, so a chip does not zero out", () => {
+    const model = buildModel(prs(), issues(), [], NOW, "", ["review"]);
+    expect(model.stageCounts).toEqual({ merge: 1, ready: 1, needs: 1, review: 1, blocked: 1 });
+  });
+
+  it("counts the stages within the text query, not across the whole board", () => {
+    const model = buildModel(prs(), issues(), [], NOW, "acme-3");
+    expect(model.stageCounts).toEqual({ merge: 0, ready: 0, needs: 0, review: 1, blocked: 0 });
+  });
+
+  it("combines with the text query rather than replacing it", () => {
+    expect(buildModel(prs(), issues(), [], NOW, "acme-3", ["review"]).items).toHaveLength(1);
+    expect(buildModel(prs(), issues(), [], NOW, "acme-3", ["ready"]).items).toHaveLength(0);
+  });
+
+  it("narrows what is shown, never what is known", () => {
+    // ACME-5 is hidden, and still spends the blocker it owns: ACME-1 keeps the
+    // credit for unblocking it, so the ranking does not move under the filter.
+    const all = buildModel(prs(), issues(), [], NOW);
+    const filtered = buildModel(prs(), issues(), [], NOW, "", ["ready"]);
+    const score = (model: typeof all) =>
+      model.items.find((item) => item.pr.number === 1)?.score;
+    expect(score(filtered)).toBe(score(all));
+    expect(filtered.items[0].unblocks).toEqual(["ACME-5"]);
+  });
+
+  it("counts a bay by stage, in the same words the chips use", () => {
+    const model = buildModel(
+      [
+        pr({ number: 1, title: "[ACME-11] Ready" }),
+        pr({ number: 2, title: "[ACME-12] In review", draft: false, bugbot: "success" }),
+      ],
+      [
+        issue("ACME-10"),
+        issue("ACME-11", { parentId: "ACME-10" }),
+        issue("ACME-12", { parentId: "ACME-10" }),
+      ],
+      [],
+      NOW,
+    );
+    expect(model.bays[0].stages).toEqual({ merge: 0, ready: 1, needs: 0, review: 1, blocked: 0 });
   });
 });
 
@@ -769,5 +867,268 @@ describe("latestPerName", () => {
 
   it("leaves distinct names alone", () => {
     expect(latestPerName(runs.slice(0, 1).concat(runs[3]))).toHaveLength(2);
+  });
+});
+
+describe("who is worth a notification", () => {
+  it("names Bugbot however its account is spelled", () => {
+    expect(authorKind("cursor[bot]", "Bot", "me")).toBe("bugbot");
+    expect(authorKind("bugbot[bot]", "Bot", "me")).toBe("bugbot");
+  });
+
+  it("drops every other bot", () => {
+    expect(authorKind("coderabbitai[bot]", "Bot", "me")).toBeNull();
+    expect(authorKind("dependabot", "Bot", "me")).toBeNull();
+  });
+
+  it("drops the reader's own comments", () => {
+    expect(authorKind("me", "User", "me")).toBeNull();
+  });
+
+  it("keeps a person named cursor a person", () => {
+    expect(authorKind("cursor", "User", "me")).toBe("person");
+  });
+});
+
+describe("grouping comments", () => {
+  const SINCE = "2026-08-26T11:00:00Z";
+
+  function target(over: Partial<PullRequest> = {}): PullRequest {
+    return pr({ owner: "acme", repo: "web", number: 888, title: "[ACME-1] A change", ...over });
+  }
+
+  function comment(over: Partial<RawComment> = {}): RawComment {
+    return {
+      surface: "issue",
+      id: 1,
+      html_url: "https://github.com/acme/web/pull/888#comment-1",
+      body: "Have another look at the retry path.",
+      created_at: "2026-08-26T11:30:00Z",
+      user: { login: "dana", type: "User" },
+      issue_url: "https://api.github.com/repos/acme/web/issues/888",
+      ...over,
+    };
+  }
+
+  it("collapses one author's comments on one PR into a single arrival", () => {
+    const { alerts, keys } = groupComments(
+      [
+        comment(),
+        comment({ surface: "inline", id: 2, created_at: "2026-08-26T11:40:00Z", body: "And here." }),
+      ],
+      [target()],
+      "me",
+      SINCE,
+      new Set(),
+    );
+
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0]).toMatchObject({ author: "dana", kind: "person", count: 2, number: 888 });
+    // The newest of the group, so the link lands on the latest thing said.
+    expect(alerts[0].id).toBe("inline:2");
+    expect(keys.sort()).toEqual(["inline:2", "issue:1"]);
+  });
+
+  it("keeps two authors on one PR apart", () => {
+    const { alerts } = groupComments(
+      [comment(), comment({ id: 2, user: { login: "cursor[bot]", type: "Bot" } })],
+      [target()],
+      "me",
+      SINCE,
+      new Set(),
+    );
+
+    expect(alerts.map((alert) => alert.kind).sort()).toEqual(["bugbot", "person"]);
+  });
+
+  it("says nothing twice", () => {
+    const { alerts, keys } = groupComments([comment()], [target()], "me", SINCE, new Set(["issue:1"]));
+    expect(alerts).toEqual([]);
+    expect(keys).toEqual([]);
+  });
+
+  it("ignores a comment edited long after it was written", () => {
+    const { alerts } = groupComments(
+      [comment({ created_at: "2026-08-20T09:00:00Z" })],
+      [target()],
+      "me",
+      SINCE,
+      new Set(),
+    );
+    expect(alerts).toEqual([]);
+  });
+
+  it("ignores a comment on something that is not one of the PRs in hand", () => {
+    const { alerts } = groupComments(
+      [comment({ issue_url: "https://api.github.com/repos/acme/web/issues/4001" })],
+      [target()],
+      "me",
+      SINCE,
+      new Set(),
+    );
+    expect(alerts).toEqual([]);
+  });
+
+  it("strips the markdown and the metadata Bugbot wraps a finding in", () => {
+    const { alerts } = groupComments(
+      [
+        comment({
+          user: { login: "cursor[bot]", type: "Bot" },
+          body:
+            "### Scan fails open past the depth cap\n\n**Medium Severity**\n\n" +
+            "`walk` returns early, so a deeper tree reports clean.\n<!-- bugbot-meta: 1 -->",
+        }),
+      ],
+      [target()],
+      "me",
+      SINCE,
+      new Set(),
+    );
+    expect(alerts[0].excerpt).toBe(
+      "Scan fails open past the depth cap Medium Severity walk returns early, so a deeper tree reports clean.",
+    );
+  });
+
+  it("drops a metadata block that was never closed", () => {
+    const { alerts } = groupComments(
+      [comment({ body: "Have another look.\n<!-- bugbot-meta" })],
+      [target()],
+      "me",
+      SINCE,
+      new Set(),
+    );
+    expect(alerts[0].excerpt).toBe("Have another look.");
+  });
+
+  it("flattens the body into an excerpt", () => {
+    const { alerts } = groupComments(
+      [comment({ body: "  Bug: the tenant id\n\nis dropped   here.  " })],
+      [target()],
+      "me",
+      SINCE,
+      new Set(),
+    );
+    expect(alerts[0].excerpt).toBe("Bug: the tenant id is dropped here.");
+  });
+});
+
+describe("what the desktop is told", () => {
+  function alert(over: Partial<CommentAlert> = {}): CommentAlert {
+    return {
+      id: "issue:1",
+      prId: 1,
+      repo: "web",
+      number: 888,
+      title: "[ACME-1] Tighten the session refresh window",
+      url: "https://github.com/acme/web/pull/888#comment-1",
+      author: "dana",
+      kind: "person",
+      count: 1,
+      excerpt: "Have another look at the retry path.",
+      at: "2026-08-26T11:30:00Z",
+      ...over,
+    };
+  }
+
+  it("names the person and the PR", () => {
+    expect(noticeFor(alert()).title).toBe("dana commented on web #888");
+  });
+
+  it("counts a burst", () => {
+    expect(noticeFor(alert({ count: 3 })).title).toBe("dana commented on web #888 (3)");
+  });
+
+  it("calls Bugbot Bugbot, not by its account", () => {
+    expect(noticeFor(alert({ kind: "bugbot", author: "cursor[bot]" })).title).toBe(
+      "Bugbot commented on web #888",
+    );
+  });
+
+  it("falls back to the PR title when the comment has no text", () => {
+    expect(noticeFor(alert({ excerpt: "" })).body).toBe("Tighten the session refresh window");
+  });
+
+  it("shares one tag per arrival, so two open windows raise one notification", () => {
+    expect(noticeFor(alert()).tag).toBe("issue:1");
+  });
+
+  it("passes over what has already been raised", () => {
+    expect(unseen([alert(), alert({ id: "issue:2" })], new Set(["issue:1"]))).toHaveLength(1);
+  });
+});
+
+describe("opening a PR without the PR Hub extension", () => {
+  // prLink only reads these four fields off the event.
+  function click(over: Partial<MouseEvent> = {}) {
+    return {
+      button: 0,
+      metaKey: false,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+      preventDefault: jest.fn(),
+      ...over,
+    } as unknown as Parameters<ReturnType<typeof prLink>["onClick"]>[0] & {
+      preventDefault: jest.Mock;
+    };
+  }
+
+  const URL = "https://github.com/acme/web/pull/888";
+
+  function mark(installed: boolean) {
+    if (installed) document.documentElement.dataset.prHub = "1";
+    else delete document.documentElement.dataset.prHub;
+  }
+
+  let posted: unknown[] = [];
+  const listener = (event: MessageEvent) => posted.push(event.data);
+
+  beforeEach(() => {
+    posted = [];
+    window.addEventListener("message", listener);
+  });
+
+  afterEach(() => {
+    window.removeEventListener("message", listener);
+    mark(false);
+  });
+
+  it("is a real GitHub link whether or not the extension is there", () => {
+    for (const installed of [false, true]) {
+      mark(installed);
+      expect(prLink(URL)).toMatchObject({ href: URL, target: "_blank", rel: "noreferrer" });
+    }
+  });
+
+  it("lets the browser have the click when the extension is absent", () => {
+    mark(false);
+    const event = click();
+    prLink(URL).onClick(event);
+    expect(event.preventDefault).not.toHaveBeenCalled();
+  });
+
+  it("posts nothing when the extension is absent", async () => {
+    mark(false);
+    prLink(URL).onClick(click());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(posted).toEqual([]);
+  });
+
+  it("hands the click to the extension only once the page is marked", async () => {
+    mark(true);
+    const event = click();
+    prLink(URL).onClick(event);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(event.preventDefault).toHaveBeenCalled();
+    expect(posted).toEqual([{ type: "prhub:open-pr", url: URL }]);
+  });
+
+  it("leaves a modified click to the browser even with the extension", () => {
+    mark(true);
+    for (const modifier of [{ metaKey: true }, { ctrlKey: true }, { shiftKey: true }, { altKey: true }, { button: 1 }]) {
+      const event = click(modifier);
+      prLink(URL).onClick(event);
+      expect(event.preventDefault).not.toHaveBeenCalled();
+    }
   });
 });

@@ -1,747 +1,796 @@
 {
-  "user": {
-    "login": "you",
-    "avatar_url": ""
+ "user": {
+  "login": "you",
+  "avatar_url": ""
+ },
+ "items": [
+  {
+   "id": 412000,
+   "node_id": "PR_billing-api_412",
+   "number": 412,
+   "title": "[ACME-1200] Add the tenant usage rollup endpoint",
+   "html_url": "https://github.com/acme/billing-api/pull/412",
+   "repository_url": "https://api.github.com/repos/acme/billing-api",
+   "created_at": "2026-07-25T12:00:00Z",
+   "updated_at": "2026-08-24T12:00:00Z",
+   "draft": false
   },
-  "items": [
-    {
-      "id": 412000,
-      "node_id": "PR_billing-api_412",
-      "number": 412,
-      "title": "[ACME-1200] Add the tenant usage rollup endpoint",
-      "html_url": "https://github.com/acme/billing-api/pull/412",
-      "repository_url": "https://api.github.com/repos/acme/billing-api",
-      "created_at": "2026-07-25T12:00:00Z",
-      "updated_at": "2026-08-24T12:00:00Z",
-      "draft": false
-    },
-    {
-      "id": 418000,
-      "node_id": "PR_billing-api_418",
-      "number": 418,
-      "title": "[ACME-1201] Read usage from the rollup endpoint",
-      "html_url": "https://github.com/acme/billing-api/pull/418",
-      "repository_url": "https://api.github.com/repos/acme/billing-api",
-      "created_at": "2026-07-27T12:00:00Z",
-      "updated_at": "2026-08-26T12:00:00Z",
-      "draft": true
-    },
-    {
-      "id": 902000,
-      "node_id": "PR_web_902",
-      "number": 902,
-      "title": "[ACME-980] Cache the pricing table between renders",
-      "html_url": "https://github.com/acme/web/pull/902",
-      "repository_url": "https://api.github.com/repos/acme/web",
-      "created_at": "2026-07-06T12:00:00Z",
-      "updated_at": "2026-08-05T12:00:00Z",
-      "draft": true
-    },
-    {
-      "id": 915000,
-      "node_id": "PR_web_915",
-      "number": 915,
-      "title": "[ACME-1310] Retire the legacy invoice modal",
-      "html_url": "https://github.com/acme/web/pull/915",
-      "repository_url": "https://api.github.com/repos/acme/web",
-      "created_at": "2026-07-24T12:00:00Z",
-      "updated_at": "2026-08-23T12:00:00Z",
-      "draft": true
-    },
-    {
-      "id": 77000,
-      "node_id": "PR_worker_77",
-      "number": 77,
-      "title": "[ACME-1311] Bound the retry queue during shutdown",
-      "html_url": "https://github.com/acme/worker/pull/77",
-      "repository_url": "https://api.github.com/repos/acme/worker",
-      "created_at": "2026-07-26T12:00:00Z",
-      "updated_at": "2026-08-25T12:00:00Z",
-      "draft": true
-    },
-    {
-      "id": 81000,
-      "node_id": "PR_worker_81",
-      "number": 81,
-      "title": "[ACME-1312] Emit a saturation metric for the pool",
-      "html_url": "https://github.com/acme/worker/pull/81",
-      "repository_url": "https://api.github.com/repos/acme/worker",
-      "created_at": "2026-07-27T12:00:00Z",
-      "updated_at": "2026-08-26T12:00:00Z",
-      "draft": true
-    },
-    {
-      "id": 240000,
-      "node_id": "PR_infra_240",
-      "number": 240,
-      "title": "[ACME-980] Add the pricing cache bucket",
-      "html_url": "https://github.com/acme/infra/pull/240",
-      "repository_url": "https://api.github.com/repos/acme/infra",
-      "created_at": "2026-07-06T12:00:00Z",
-      "updated_at": "2026-08-05T12:00:00Z",
-      "draft": true
-    },
-    {
-      "id": 12000,
-      "node_id": "PR_toolbox_12",
-      "number": 12,
-      "title": "Document the release checklist",
-      "html_url": "https://github.com/acme/toolbox/pull/12",
-      "repository_url": "https://api.github.com/repos/acme/toolbox",
-      "created_at": "2026-07-21T12:00:00Z",
-      "updated_at": "2026-08-20T12:00:00Z",
-      "draft": true
-    },
-    {
-      "id": 888000,
-      "node_id": "PR_web_888",
-      "number": 888,
-      "title": "[ACME-1150] Tighten the session refresh window",
-      "html_url": "https://github.com/acme/web/pull/888",
-      "repository_url": "https://api.github.com/repos/acme/web",
-      "created_at": "2026-07-18T12:00:00Z",
-      "updated_at": "2026-08-17T12:00:00Z",
-      "draft": false
-    }
-  ],
-  "details": {
-    "acme/billing-api/412": {
-      "head": {
-        "sha": "ba33cebd33f6e549a415bb6c3077d0ad49d8784f",
-        "ref": "acme-1200-branch"
-      },
-      "base": {
-        "ref": "main"
-      },
-      "mergeable_state": "clean",
-      "additions": 120,
-      "deletions": 40,
-      "changed_files": 6
-    },
-    "acme/billing-api/418": {
-      "head": {
-        "sha": "584c3fb9c360940fe53a31c65ca3fced467704df",
-        "ref": "acme-1201-branch"
-      },
-      "base": {
-        "ref": "acme-1200-branch"
-      },
-      "mergeable_state": "behind",
-      "additions": 120,
-      "deletions": 40,
-      "changed_files": 6
-    },
-    "acme/web/902": {
-      "head": {
-        "sha": "78f47506fe072d4c6ea83531e058fb9316407119",
-        "ref": "acme-980-branch"
-      },
-      "base": {
-        "ref": "main"
-      },
-      "mergeable_state": "clean",
-      "additions": 120,
-      "deletions": 40,
-      "changed_files": 6
-    },
-    "acme/web/915": {
-      "head": {
-        "sha": "4d6790435f25c6499f49e00f42b7a5da0d683c6e",
-        "ref": "acme-1310-branch"
-      },
-      "base": {
-        "ref": "main"
-      },
-      "mergeable_state": "dirty",
-      "additions": 120,
-      "deletions": 40,
-      "changed_files": 6
-    },
-    "acme/worker/77": {
-      "head": {
-        "sha": "6f21c54d63907893d52c532d52be51e367428f27",
-        "ref": "acme-1311-branch"
-      },
-      "base": {
-        "ref": "main"
-      },
-      "mergeable_state": "behind",
-      "additions": 120,
-      "deletions": 40,
-      "changed_files": 6
-    },
-    "acme/worker/81": {
-      "head": {
-        "sha": "1e519a4ab68d7ae691c8b77bbb61a63c5754e7ee",
-        "ref": "acme-1312-branch"
-      },
-      "base": {
-        "ref": "main"
-      },
-      "mergeable_state": "clean",
-      "additions": 120,
-      "deletions": 40,
-      "changed_files": 6
-    },
-    "acme/infra/240": {
-      "head": {
-        "sha": "2d8153b2b46b2bbc39c8b58ded8435dc8e9b83bd",
-        "ref": "acme-980-branch"
-      },
-      "base": {
-        "ref": "main"
-      },
-      "mergeable_state": "behind",
-      "additions": 120,
-      "deletions": 40,
-      "changed_files": 6
-    },
-    "acme/toolbox/12": {
-      "head": {
-        "sha": "76a21704cfc18239aca4e25056df7746c64735aa",
-        "ref": "document the release checklist-branch"
-      },
-      "base": {
-        "ref": "main"
-      },
-      "mergeable_state": "clean",
-      "additions": 120,
-      "deletions": 40,
-      "changed_files": 6
-    },
-    "acme/web/888": {
-      "head": {
-        "sha": "e47baf6a77444e6d1aea6638fd8d3ddf6c39bfde",
-        "ref": "acme-1150-branch"
-      },
-      "base": {
-        "ref": "main"
-      },
-      "mergeable_state": "behind",
-      "additions": 120,
-      "deletions": 40,
-      "changed_files": 6
-    }
+  {
+   "id": 418000,
+   "node_id": "PR_billing-api_418",
+   "number": 418,
+   "title": "[ACME-1201] Read usage from the rollup endpoint",
+   "html_url": "https://github.com/acme/billing-api/pull/418",
+   "repository_url": "https://api.github.com/repos/acme/billing-api",
+   "created_at": "2026-07-27T12:00:00Z",
+   "updated_at": "2026-08-26T12:00:00Z",
+   "draft": true
   },
-  "reviews": {
-    "acme/billing-api/412": [
-      {
-        "state": "APPROVED",
-        "user": {
-          "login": "reviewer",
-          "type": "User",
-          "avatar_url": "http://localhost:5179/avatar/reviewer.png"
-        }
-      }
-    ],
-    "acme/billing-api/418": [],
-    "acme/web/902": [
-      {
-        "state": "COMMENTED",
-        "user": {
-          "login": "mira",
-          "type": "User",
-          "avatar_url": "http://localhost:5179/avatar/mira.png"
-        }
-      }
-    ],
-    "acme/web/915": [],
-    "acme/worker/77": [],
-    "acme/worker/81": [],
-    "acme/infra/240": [],
-    "acme/toolbox/12": [],
-    "acme/web/888": [
-      {
-        "state": "COMMENTED",
-        "user": {
-          "login": "dana",
-          "type": "User",
-          "avatar_url": "http://localhost:5179/avatar/dana.png"
-        }
-      },
-      {
-        "state": "COMMENTED",
-        "user": {
-          "login": "coderabbitai[bot]",
-          "type": "Bot"
-        }
-      }
-    ]
+  {
+   "id": 902000,
+   "node_id": "PR_web_902",
+   "number": 902,
+   "title": "[ACME-980] Cache the pricing table between renders",
+   "html_url": "https://github.com/acme/web/pull/902",
+   "repository_url": "https://api.github.com/repos/acme/web",
+   "created_at": "2026-07-06T12:00:00Z",
+   "updated_at": "2026-08-05T12:00:00Z",
+   "draft": true
   },
-  "checkruns": {
-    "ba33cebd33f6e549a415bb6c3077d0ad49d8784f": {
-      "total_count": 3,
-      "check_runs": [
-        {
-          "name": "build",
-          "status": "completed",
-          "conclusion": "success"
-        },
-        {
-          "name": "lint-and-test / golangci-lint",
-          "status": "completed",
-          "conclusion": "success"
-        },
-        {
-          "name": "Cursor Bugbot",
-          "status": "completed",
-          "conclusion": "success"
-        }
-      ]
-    },
-    "584c3fb9c360940fe53a31c65ca3fced467704df": {
-      "total_count": 2,
-      "check_runs": [
-        {
-          "name": "build",
-          "status": "completed",
-          "conclusion": "success"
-        },
-        {
-          "name": "lint-and-test / golangci-lint",
-          "status": "completed",
-          "conclusion": "success"
-        }
-      ]
-    },
-    "78f47506fe072d4c6ea83531e058fb9316407119": {
-      "total_count": 2,
-      "check_runs": [
-        {
-          "name": "build",
-          "status": "completed",
-          "conclusion": "success"
-        },
-        {
-          "name": "lint-and-test / golangci-lint",
-          "status": "completed",
-          "conclusion": "success"
-        }
-      ]
-    },
-    "4d6790435f25c6499f49e00f42b7a5da0d683c6e": {
-      "total_count": 2,
-      "check_runs": [
-        {
-          "name": "build",
-          "status": "completed",
-          "conclusion": "success"
-        },
-        {
-          "name": "lint-and-test / golangci-lint",
-          "status": "completed",
-          "conclusion": "success"
-        }
-      ]
-    },
-    "6f21c54d63907893d52c532d52be51e367428f27": {
-      "total_count": 2,
-      "check_runs": [
-        {
-          "name": "build",
-          "status": "completed",
-          "conclusion": "success"
-        },
-        {
-          "name": "lint-and-test / golangci-lint",
-          "status": "completed",
-          "conclusion": "failure"
-        }
-      ]
-    },
-    "1e519a4ab68d7ae691c8b77bbb61a63c5754e7ee": {
-      "total_count": 3,
-      "check_runs": [
-        {
-          "name": "build",
-          "status": "completed",
-          "conclusion": "success"
-        },
-        {
-          "name": "lint-and-test / golangci-lint",
-          "status": "completed",
-          "conclusion": "success"
-        },
-        {
-          "name": "e2e",
-          "status": "in_progress",
-          "conclusion": null
-        }
-      ]
-    },
-    "2d8153b2b46b2bbc39c8b58ded8435dc8e9b83bd": {
-      "total_count": 2,
-      "check_runs": [
-        {
-          "name": "build",
-          "status": "completed",
-          "conclusion": "success"
-        },
-        {
-          "name": "lint-and-test / golangci-lint",
-          "status": "completed",
-          "conclusion": "success"
-        }
-      ]
-    },
-    "76a21704cfc18239aca4e25056df7746c64735aa": {
-      "total_count": 2,
-      "check_runs": [
-        {
-          "name": "build",
-          "status": "completed",
-          "conclusion": "success"
-        },
-        {
-          "name": "lint-and-test / golangci-lint",
-          "status": "completed",
-          "conclusion": "success"
-        }
-      ]
-    },
-    "e47baf6a77444e6d1aea6638fd8d3ddf6c39bfde": {
-      "total_count": 2,
-      "check_runs": [
-        {
-          "name": "build",
-          "status": "completed",
-          "conclusion": "success"
-        },
-        {
-          "name": "lint-and-test / golangci-lint",
-          "status": "completed",
-          "conclusion": "success"
-        }
-      ]
-    }
+  {
+   "id": 915000,
+   "node_id": "PR_web_915",
+   "number": 915,
+   "title": "[ACME-1310] Retire the legacy invoice modal",
+   "html_url": "https://github.com/acme/web/pull/915",
+   "repository_url": "https://api.github.com/repos/acme/web",
+   "created_at": "2026-07-24T12:00:00Z",
+   "updated_at": "2026-08-23T12:00:00Z",
+   "draft": true
   },
-  "issues": [
-    {
-      "identifier": "ACME-1199",
-      "title": "Usage-based billing rollout",
-      "url": "https://linear.app/acme/issue/ACME-1199",
-      "priority": 1,
-      "state": {
-        "name": "In Progress",
-        "type": "started"
-      },
-      "project": null,
-      "attachments": {
-        "nodes": []
-      },
-      "inverseRelations": {
-        "nodes": []
-      },
-      "parent": null,
-      "id": "uuid-ACME-1199"
-    },
-    {
-      "identifier": "ACME-1200",
-      "title": "billing-api: usage rollup endpoint",
-      "url": "https://linear.app/acme/issue/ACME-1200",
-      "priority": 2,
-      "state": {
-        "name": "In Review",
-        "type": "started"
-      },
-      "project": null,
-      "attachments": {
-        "nodes": []
-      },
-      "inverseRelations": {
-        "nodes": []
-      },
-      "parent": {
-        "identifier": "ACME-1199",
-        "title": "Usage-based billing rollout",
-        "url": "https://linear.app/acme/issue/ACME-1199",
-        "priority": 1,
-        "state": {
-          "name": "In Progress",
-          "type": "started"
-        },
-        "project": null,
-        "id": "uuid-ACME-1199"
-      },
-      "id": "uuid-ACME-1200"
-    },
-    {
-      "identifier": "ACME-1201",
-      "title": "web: read the rollup endpoint",
-      "url": "https://linear.app/acme/issue/ACME-1201",
-      "priority": 2,
-      "state": {
-        "name": "Backlog",
-        "type": "backlog"
-      },
-      "project": null,
-      "attachments": {
-        "nodes": []
-      },
-      "inverseRelations": {
-        "nodes": [
-          {
-            "type": "blocks",
-            "issue": {
-              "identifier": "ACME-1200"
-            }
-          }
-        ]
-      },
-      "parent": {
-        "identifier": "ACME-1199",
-        "title": "Usage-based billing rollout",
-        "url": "https://linear.app/acme/issue/ACME-1199",
-        "priority": 1,
-        "state": {
-          "name": "In Progress",
-          "type": "started"
-        },
-        "project": null,
-        "id": "uuid-ACME-1199"
-      },
-      "id": "uuid-ACME-1201"
-    },
-    {
-      "identifier": "ACME-980",
-      "title": "Pricing table performance",
-      "url": "https://linear.app/acme/issue/ACME-980",
-      "priority": 3,
-      "state": {
-        "name": "In Progress",
-        "type": "started"
-      },
-      "project": null,
-      "attachments": {
-        "nodes": []
-      },
-      "inverseRelations": {
-        "nodes": []
-      },
-      "parent": null,
-      "id": "uuid-ACME-980"
-    },
-    {
-      "identifier": "ACME-1310",
-      "title": "Retire the legacy invoice modal",
-      "url": "https://linear.app/acme/issue/ACME-1310",
-      "priority": 4,
-      "state": {
-        "name": "In Progress",
-        "type": "started"
-      },
-      "project": null,
-      "attachments": {
-        "nodes": []
-      },
-      "inverseRelations": {
-        "nodes": []
-      },
-      "parent": null,
-      "id": "uuid-ACME-1310"
-    },
-    {
-      "identifier": "ACME-1311",
-      "title": "worker: retry queue loses work on shutdown",
-      "url": "https://linear.app/acme/issue/ACME-1311",
-      "priority": 2,
-      "state": {
-        "name": "Backlog",
-        "type": "backlog"
-      },
-      "project": null,
-      "attachments": {
-        "nodes": []
-      },
-      "inverseRelations": {
-        "nodes": []
-      },
-      "parent": null,
-      "id": "uuid-ACME-1311"
-    },
-    {
-      "identifier": "ACME-1312",
-      "title": "worker: pool saturation is invisible",
-      "url": "https://linear.app/acme/issue/ACME-1312",
-      "priority": 3,
-      "state": {
-        "name": "In Progress",
-        "type": "started"
-      },
-      "project": null,
-      "attachments": {
-        "nodes": []
-      },
-      "inverseRelations": {
-        "nodes": []
-      },
-      "parent": null,
-      "id": "uuid-ACME-1312"
-    },
-    {
-      "identifier": "ACME-1150",
-      "title": "Session refresh window is too wide",
-      "url": "https://linear.app/acme/issue/ACME-1150",
-      "priority": 0,
-      "state": {
-        "name": "In Review",
-        "type": "started"
-      },
-      "project": null,
-      "attachments": {
-        "nodes": []
-      },
-      "inverseRelations": {
-        "nodes": []
-      },
-      "parent": null,
-      "id": "uuid-ACME-1150"
-    }
-  ],
-  "children": [
-    {
-      "parent": {
-        "identifier": "ACME-1199"
-      },
-      "state": {
-        "type": "completed"
-      }
-    },
-    {
-      "parent": {
-        "identifier": "ACME-1199"
-      },
-      "state": {
-        "type": "completed"
-      }
-    },
-    {
-      "parent": {
-        "identifier": "ACME-1199"
-      },
-      "state": {
-        "type": "completed"
-      }
-    },
-    {
-      "parent": {
-        "identifier": "ACME-1199"
-      },
-      "state": {
-        "type": "completed"
-      }
-    },
-    {
-      "parent": {
-        "identifier": "ACME-1199"
-      },
-      "state": {
-        "type": "completed"
-      }
-    },
-    {
-      "parent": {
-        "identifier": "ACME-1199"
-      },
-      "state": {
-        "type": "canceled"
-      }
-    },
-    {
-      "parent": {
-        "identifier": "ACME-1199"
-      },
-      "state": {
-        "type": "started"
-      }
-    },
-    {
-      "parent": {
-        "identifier": "ACME-1199"
-      },
-      "state": {
-        "type": "started"
-      }
-    },
-    {
-      "parent": {
-        "identifier": "ACME-1199"
-      },
-      "state": {
-        "type": "backlog"
-      }
-    },
-    {
-      "parent": {
-        "identifier": "ACME-1199"
-      },
-      "state": {
-        "type": "backlog"
-      }
-    },
-    {
-      "parent": {
-        "identifier": "ACME-980"
-      },
-      "state": {
-        "type": "completed"
-      }
-    },
-    {
-      "parent": {
-        "identifier": "ACME-980"
-      },
-      "state": {
-        "type": "completed"
-      }
-    },
-    {
-      "parent": {
-        "identifier": "ACME-980"
-      },
-      "state": {
-        "type": "started"
-      }
-    },
-    {
-      "parent": {
-        "identifier": "ACME-980"
-      },
-      "state": {
-        "type": "started"
-      }
-    },
-    {
-      "parent": {
-        "identifier": "ACME-980"
-      },
-      "state": {
-        "type": "unstarted"
-      }
-    }
-  ],
-  "commits": {
-    "acme/worker/77": [
-      "6f21c54d63907893d52c532d52be51e367428f27"
-    ],
-    "acme/worker/81": [
-      "6f21c54d63907893d52c532d52be51e367428f27",
-      "1e519a4ab68d7ae691c8b77bbb61a63c5754e7ee"
-    ],
-    "acme/billing-api/412": [
-      "ba33cebd33f6e549a415bb6c3077d0ad49d8784f"
-    ],
-    "acme/billing-api/418": [
-      "584c3fb9c360940fe53a31c65ca3fced467704df"
-    ],
-    "acme/web/888": [
-      "e47baf6a77444e6d1aea6638fd8d3ddf6c39bfde"
-    ],
-    "acme/web/902": [
-      "78f47506fe072d4c6ea83531e058fb9316407119"
-    ],
-    "acme/web/915": [
-      "4d6790435f25c6499f49e00f42b7a5da0d683c6e"
-    ]
+  {
+   "id": 77000,
+   "node_id": "PR_worker_77",
+   "number": 77,
+   "title": "[ACME-1311] Bound the retry queue during shutdown",
+   "html_url": "https://github.com/acme/worker/pull/77",
+   "repository_url": "https://api.github.com/repos/acme/worker",
+   "created_at": "2026-07-26T12:00:00Z",
+   "updated_at": "2026-08-25T12:00:00Z",
+   "draft": true
+  },
+  {
+   "id": 81000,
+   "node_id": "PR_worker_81",
+   "number": 81,
+   "title": "[ACME-1312] Emit a saturation metric for the pool",
+   "html_url": "https://github.com/acme/worker/pull/81",
+   "repository_url": "https://api.github.com/repos/acme/worker",
+   "created_at": "2026-07-27T12:00:00Z",
+   "updated_at": "2026-08-26T12:00:00Z",
+   "draft": true
+  },
+  {
+   "id": 240000,
+   "node_id": "PR_infra_240",
+   "number": 240,
+   "title": "[ACME-980] Add the pricing cache bucket",
+   "html_url": "https://github.com/acme/infra/pull/240",
+   "repository_url": "https://api.github.com/repos/acme/infra",
+   "created_at": "2026-07-06T12:00:00Z",
+   "updated_at": "2026-08-05T12:00:00Z",
+   "draft": true
+  },
+  {
+   "id": 12000,
+   "node_id": "PR_toolbox_12",
+   "number": 12,
+   "title": "Document the release checklist",
+   "html_url": "https://github.com/acme/toolbox/pull/12",
+   "repository_url": "https://api.github.com/repos/acme/toolbox",
+   "created_at": "2026-07-21T12:00:00Z",
+   "updated_at": "2026-08-20T12:00:00Z",
+   "draft": true
+  },
+  {
+   "id": 888000,
+   "node_id": "PR_web_888",
+   "number": 888,
+   "title": "[ACME-1150] Tighten the session refresh window",
+   "html_url": "https://github.com/acme/web/pull/888",
+   "repository_url": "https://api.github.com/repos/acme/web",
+   "created_at": "2026-07-18T12:00:00Z",
+   "updated_at": "2026-08-17T12:00:00Z",
+   "draft": false
   }
+ ],
+ "details": {
+  "acme/billing-api/412": {
+   "head": {
+    "sha": "ba33cebd33f6e549a415bb6c3077d0ad49d8784f",
+    "ref": "acme-1200-branch"
+   },
+   "base": {
+    "ref": "main"
+   },
+   "mergeable_state": "clean",
+   "additions": 120,
+   "deletions": 40,
+   "changed_files": 6
+  },
+  "acme/billing-api/418": {
+   "head": {
+    "sha": "584c3fb9c360940fe53a31c65ca3fced467704df",
+    "ref": "acme-1201-branch"
+   },
+   "base": {
+    "ref": "acme-1200-branch"
+   },
+   "mergeable_state": "behind",
+   "additions": 120,
+   "deletions": 40,
+   "changed_files": 6
+  },
+  "acme/web/902": {
+   "head": {
+    "sha": "78f47506fe072d4c6ea83531e058fb9316407119",
+    "ref": "acme-980-branch"
+   },
+   "base": {
+    "ref": "main"
+   },
+   "mergeable_state": "clean",
+   "additions": 120,
+   "deletions": 40,
+   "changed_files": 6
+  },
+  "acme/web/915": {
+   "head": {
+    "sha": "4d6790435f25c6499f49e00f42b7a5da0d683c6e",
+    "ref": "acme-1310-branch"
+   },
+   "base": {
+    "ref": "main"
+   },
+   "mergeable_state": "dirty",
+   "additions": 120,
+   "deletions": 40,
+   "changed_files": 6
+  },
+  "acme/worker/77": {
+   "head": {
+    "sha": "6f21c54d63907893d52c532d52be51e367428f27",
+    "ref": "acme-1311-branch"
+   },
+   "base": {
+    "ref": "main"
+   },
+   "mergeable_state": "behind",
+   "additions": 120,
+   "deletions": 40,
+   "changed_files": 6
+  },
+  "acme/worker/81": {
+   "head": {
+    "sha": "1e519a4ab68d7ae691c8b77bbb61a63c5754e7ee",
+    "ref": "acme-1312-branch"
+   },
+   "base": {
+    "ref": "main"
+   },
+   "mergeable_state": "clean",
+   "additions": 120,
+   "deletions": 40,
+   "changed_files": 6
+  },
+  "acme/infra/240": {
+   "head": {
+    "sha": "2d8153b2b46b2bbc39c8b58ded8435dc8e9b83bd",
+    "ref": "acme-980-branch"
+   },
+   "base": {
+    "ref": "main"
+   },
+   "mergeable_state": "behind",
+   "additions": 120,
+   "deletions": 40,
+   "changed_files": 6
+  },
+  "acme/toolbox/12": {
+   "head": {
+    "sha": "76a21704cfc18239aca4e25056df7746c64735aa",
+    "ref": "document the release checklist-branch"
+   },
+   "base": {
+    "ref": "main"
+   },
+   "mergeable_state": "clean",
+   "additions": 120,
+   "deletions": 40,
+   "changed_files": 6
+  },
+  "acme/web/888": {
+   "head": {
+    "sha": "e47baf6a77444e6d1aea6638fd8d3ddf6c39bfde",
+    "ref": "acme-1150-branch"
+   },
+   "base": {
+    "ref": "main"
+   },
+   "mergeable_state": "behind",
+   "additions": 120,
+   "deletions": 40,
+   "changed_files": 6
+  }
+ },
+ "reviews": {
+  "acme/billing-api/412": [
+   {
+    "state": "APPROVED",
+    "user": {
+     "login": "reviewer",
+     "type": "User",
+     "avatar_url": "http://localhost:5179/avatar/reviewer.png"
+    }
+   }
+  ],
+  "acme/billing-api/418": [],
+  "acme/web/902": [
+   {
+    "state": "COMMENTED",
+    "user": {
+     "login": "mira",
+     "type": "User",
+     "avatar_url": "http://localhost:5179/avatar/mira.png"
+    }
+   }
+  ],
+  "acme/web/915": [],
+  "acme/worker/77": [],
+  "acme/worker/81": [],
+  "acme/infra/240": [],
+  "acme/toolbox/12": [],
+  "acme/web/888": [
+   {
+    "state": "COMMENTED",
+    "user": {
+     "login": "dana",
+     "type": "User",
+     "avatar_url": "http://localhost:5179/avatar/dana.png"
+    },
+    "body": "One release of overlap on the cookie name would save every open session."
+   },
+   {
+    "state": "COMMENTED",
+    "user": {
+     "login": "coderabbitai[bot]",
+     "type": "Bot"
+    }
+   }
+  ]
+ },
+ "checkruns": {
+  "ba33cebd33f6e549a415bb6c3077d0ad49d8784f": {
+   "total_count": 3,
+   "check_runs": [
+    {
+     "name": "build",
+     "status": "completed",
+     "conclusion": "success"
+    },
+    {
+     "name": "lint-and-test / golangci-lint",
+     "status": "completed",
+     "conclusion": "success"
+    },
+    {
+     "name": "Cursor Bugbot",
+     "status": "completed",
+     "conclusion": "success"
+    }
+   ]
+  },
+  "584c3fb9c360940fe53a31c65ca3fced467704df": {
+   "total_count": 2,
+   "check_runs": [
+    {
+     "name": "build",
+     "status": "completed",
+     "conclusion": "success"
+    },
+    {
+     "name": "lint-and-test / golangci-lint",
+     "status": "completed",
+     "conclusion": "success"
+    }
+   ]
+  },
+  "78f47506fe072d4c6ea83531e058fb9316407119": {
+   "total_count": 2,
+   "check_runs": [
+    {
+     "name": "build",
+     "status": "completed",
+     "conclusion": "success"
+    },
+    {
+     "name": "lint-and-test / golangci-lint",
+     "status": "completed",
+     "conclusion": "success"
+    }
+   ]
+  },
+  "4d6790435f25c6499f49e00f42b7a5da0d683c6e": {
+   "total_count": 2,
+   "check_runs": [
+    {
+     "name": "build",
+     "status": "completed",
+     "conclusion": "success"
+    },
+    {
+     "name": "lint-and-test / golangci-lint",
+     "status": "completed",
+     "conclusion": "success"
+    }
+   ]
+  },
+  "6f21c54d63907893d52c532d52be51e367428f27": {
+   "total_count": 2,
+   "check_runs": [
+    {
+     "name": "build",
+     "status": "completed",
+     "conclusion": "success"
+    },
+    {
+     "name": "lint-and-test / golangci-lint",
+     "status": "completed",
+     "conclusion": "failure"
+    }
+   ]
+  },
+  "1e519a4ab68d7ae691c8b77bbb61a63c5754e7ee": {
+   "total_count": 3,
+   "check_runs": [
+    {
+     "name": "build",
+     "status": "completed",
+     "conclusion": "success"
+    },
+    {
+     "name": "lint-and-test / golangci-lint",
+     "status": "completed",
+     "conclusion": "success"
+    },
+    {
+     "name": "e2e",
+     "status": "in_progress",
+     "conclusion": null
+    }
+   ]
+  },
+  "2d8153b2b46b2bbc39c8b58ded8435dc8e9b83bd": {
+   "total_count": 2,
+   "check_runs": [
+    {
+     "name": "build",
+     "status": "completed",
+     "conclusion": "success"
+    },
+    {
+     "name": "lint-and-test / golangci-lint",
+     "status": "completed",
+     "conclusion": "success"
+    }
+   ]
+  },
+  "76a21704cfc18239aca4e25056df7746c64735aa": {
+   "total_count": 2,
+   "check_runs": [
+    {
+     "name": "build",
+     "status": "completed",
+     "conclusion": "success"
+    },
+    {
+     "name": "lint-and-test / golangci-lint",
+     "status": "completed",
+     "conclusion": "success"
+    }
+   ]
+  },
+  "e47baf6a77444e6d1aea6638fd8d3ddf6c39bfde": {
+   "total_count": 2,
+   "check_runs": [
+    {
+     "name": "build",
+     "status": "completed",
+     "conclusion": "success"
+    },
+    {
+     "name": "lint-and-test / golangci-lint",
+     "status": "completed",
+     "conclusion": "success"
+    }
+   ]
+  }
+ },
+ "issues": [
+  {
+   "identifier": "ACME-1199",
+   "title": "Usage-based billing rollout",
+   "url": "https://linear.app/acme/issue/ACME-1199",
+   "priority": 1,
+   "state": {
+    "name": "In Progress",
+    "type": "started"
+   },
+   "project": null,
+   "attachments": {
+    "nodes": []
+   },
+   "inverseRelations": {
+    "nodes": []
+   },
+   "parent": null,
+   "id": "uuid-ACME-1199"
+  },
+  {
+   "identifier": "ACME-1200",
+   "title": "billing-api: usage rollup endpoint",
+   "url": "https://linear.app/acme/issue/ACME-1200",
+   "priority": 2,
+   "state": {
+    "name": "In Review",
+    "type": "started"
+   },
+   "project": null,
+   "attachments": {
+    "nodes": []
+   },
+   "inverseRelations": {
+    "nodes": []
+   },
+   "parent": {
+    "identifier": "ACME-1199",
+    "title": "Usage-based billing rollout",
+    "url": "https://linear.app/acme/issue/ACME-1199",
+    "priority": 1,
+    "state": {
+     "name": "In Progress",
+     "type": "started"
+    },
+    "project": null,
+    "id": "uuid-ACME-1199"
+   },
+   "id": "uuid-ACME-1200"
+  },
+  {
+   "identifier": "ACME-1201",
+   "title": "web: read the rollup endpoint",
+   "url": "https://linear.app/acme/issue/ACME-1201",
+   "priority": 2,
+   "state": {
+    "name": "Backlog",
+    "type": "backlog"
+   },
+   "project": null,
+   "attachments": {
+    "nodes": []
+   },
+   "inverseRelations": {
+    "nodes": [
+     {
+      "type": "blocks",
+      "issue": {
+       "identifier": "ACME-1200"
+      }
+     }
+    ]
+   },
+   "parent": {
+    "identifier": "ACME-1199",
+    "title": "Usage-based billing rollout",
+    "url": "https://linear.app/acme/issue/ACME-1199",
+    "priority": 1,
+    "state": {
+     "name": "In Progress",
+     "type": "started"
+    },
+    "project": null,
+    "id": "uuid-ACME-1199"
+   },
+   "id": "uuid-ACME-1201"
+  },
+  {
+   "identifier": "ACME-980",
+   "title": "Pricing table performance",
+   "url": "https://linear.app/acme/issue/ACME-980",
+   "priority": 3,
+   "state": {
+    "name": "In Progress",
+    "type": "started"
+   },
+   "project": null,
+   "attachments": {
+    "nodes": []
+   },
+   "inverseRelations": {
+    "nodes": []
+   },
+   "parent": null,
+   "id": "uuid-ACME-980"
+  },
+  {
+   "identifier": "ACME-1310",
+   "title": "Retire the legacy invoice modal",
+   "url": "https://linear.app/acme/issue/ACME-1310",
+   "priority": 4,
+   "state": {
+    "name": "In Progress",
+    "type": "started"
+   },
+   "project": null,
+   "attachments": {
+    "nodes": []
+   },
+   "inverseRelations": {
+    "nodes": []
+   },
+   "parent": null,
+   "id": "uuid-ACME-1310"
+  },
+  {
+   "identifier": "ACME-1311",
+   "title": "worker: retry queue loses work on shutdown",
+   "url": "https://linear.app/acme/issue/ACME-1311",
+   "priority": 2,
+   "state": {
+    "name": "Backlog",
+    "type": "backlog"
+   },
+   "project": null,
+   "attachments": {
+    "nodes": []
+   },
+   "inverseRelations": {
+    "nodes": []
+   },
+   "parent": null,
+   "id": "uuid-ACME-1311"
+  },
+  {
+   "identifier": "ACME-1312",
+   "title": "worker: pool saturation is invisible",
+   "url": "https://linear.app/acme/issue/ACME-1312",
+   "priority": 3,
+   "state": {
+    "name": "In Progress",
+    "type": "started"
+   },
+   "project": null,
+   "attachments": {
+    "nodes": []
+   },
+   "inverseRelations": {
+    "nodes": []
+   },
+   "parent": null,
+   "id": "uuid-ACME-1312"
+  },
+  {
+   "identifier": "ACME-1150",
+   "title": "Session refresh window is too wide",
+   "url": "https://linear.app/acme/issue/ACME-1150",
+   "priority": 0,
+   "state": {
+    "name": "In Review",
+    "type": "started"
+   },
+   "project": null,
+   "attachments": {
+    "nodes": []
+   },
+   "inverseRelations": {
+    "nodes": []
+   },
+   "parent": null,
+   "id": "uuid-ACME-1150"
+  }
+ ],
+ "children": [
+  {
+   "parent": {
+    "identifier": "ACME-1199"
+   },
+   "state": {
+    "type": "completed"
+   }
+  },
+  {
+   "parent": {
+    "identifier": "ACME-1199"
+   },
+   "state": {
+    "type": "completed"
+   }
+  },
+  {
+   "parent": {
+    "identifier": "ACME-1199"
+   },
+   "state": {
+    "type": "completed"
+   }
+  },
+  {
+   "parent": {
+    "identifier": "ACME-1199"
+   },
+   "state": {
+    "type": "completed"
+   }
+  },
+  {
+   "parent": {
+    "identifier": "ACME-1199"
+   },
+   "state": {
+    "type": "completed"
+   }
+  },
+  {
+   "parent": {
+    "identifier": "ACME-1199"
+   },
+   "state": {
+    "type": "canceled"
+   }
+  },
+  {
+   "parent": {
+    "identifier": "ACME-1199"
+   },
+   "state": {
+    "type": "started"
+   }
+  },
+  {
+   "parent": {
+    "identifier": "ACME-1199"
+   },
+   "state": {
+    "type": "started"
+   }
+  },
+  {
+   "parent": {
+    "identifier": "ACME-1199"
+   },
+   "state": {
+    "type": "backlog"
+   }
+  },
+  {
+   "parent": {
+    "identifier": "ACME-1199"
+   },
+   "state": {
+    "type": "backlog"
+   }
+  },
+  {
+   "parent": {
+    "identifier": "ACME-980"
+   },
+   "state": {
+    "type": "completed"
+   }
+  },
+  {
+   "parent": {
+    "identifier": "ACME-980"
+   },
+   "state": {
+    "type": "completed"
+   }
+  },
+  {
+   "parent": {
+    "identifier": "ACME-980"
+   },
+   "state": {
+    "type": "started"
+   }
+  },
+  {
+   "parent": {
+    "identifier": "ACME-980"
+   },
+   "state": {
+    "type": "started"
+   }
+  },
+  {
+   "parent": {
+    "identifier": "ACME-980"
+   },
+   "state": {
+    "type": "unstarted"
+   }
+  }
+ ],
+ "commits": {
+  "acme/worker/77": [
+   "6f21c54d63907893d52c532d52be51e367428f27"
+  ],
+  "acme/worker/81": [
+   "6f21c54d63907893d52c532d52be51e367428f27",
+   "1e519a4ab68d7ae691c8b77bbb61a63c5754e7ee"
+  ],
+  "acme/billing-api/412": [
+   "ba33cebd33f6e549a415bb6c3077d0ad49d8784f"
+  ],
+  "acme/billing-api/418": [
+   "584c3fb9c360940fe53a31c65ca3fced467704df"
+  ],
+  "acme/web/888": [
+   "e47baf6a77444e6d1aea6638fd8d3ddf6c39bfde"
+  ],
+  "acme/web/902": [
+   "78f47506fe072d4c6ea83531e058fb9316407119"
+  ],
+  "acme/web/915": [
+   "4d6790435f25c6499f49e00f42b7a5da0d683c6e"
+  ]
+ },
+ "comments": {
+  "issues": {
+   "acme/web": [
+    {
+     "target": 888,
+     "login": "dana",
+     "type": "User",
+     "body": "Can we keep the old cookie name for one release? Otherwise every open session is logged out."
+    },
+    {
+     "target": 888,
+     "login": "coderabbitai[bot]",
+     "type": "Bot",
+     "body": "Walkthrough: 3 files changed, 1 test added."
+    },
+    {
+     "target": 888,
+     "login": "you",
+     "type": "User",
+     "body": "Good point \u2014 pushing a fix now."
+    }
+   ]
+  },
+  "pulls": {
+   "acme/web": [
+    {
+     "target": 888,
+     "login": "cursor[bot]",
+     "type": "Bot",
+     "body": "Bug: the refreshed token is built without tenantId, so the next request falls back to the default tenant."
+    },
+    {
+     "target": 902,
+     "login": "cursor[bot]",
+     "type": "Bot",
+     "body": "Bug: the cache key ignores currency, so two tenants on different currencies share one entry."
+    }
+   ],
+   "acme/billing-api": [
+    {
+     "target": 412,
+     "login": "reviewer",
+     "type": "User",
+     "body": "The rollup window should be inclusive at both ends."
+    }
+   ]
+  }
+ }
 }

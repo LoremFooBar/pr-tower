@@ -13,12 +13,13 @@ import {
   type Data,
   type Status,
 } from "@/core/api";
+import { noticeFor, unseen } from "@/core/notify";
 import { timeAgo } from "@/core/store";
 import { cn } from "@/lib/utils";
 import { stripTicketPrefix } from "@/core/link";
-import type { Item } from "@/core/types";
+import type { CommentAlert, Item, Stage } from "@/core/types";
 import { Setup } from "@/ui/setup";
-import { Bay, Ledger, Queue, type Handlers } from "@/ui/board";
+import { Bay, Ledger, Queue, Stages, STAGE_PROSE, type Handlers } from "@/ui/board";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -29,13 +30,90 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Separator } from "@/components/ui/separator";
 import "@/fonts.css";
 import "@/styles.css";
-import { KeyRound, Loader2, RefreshCw, Search, Send, TowerControl, X } from "lucide-react";
+import {
+  Bell,
+  BellOff,
+  KeyRound,
+  Loader2,
+  RefreshCw,
+  Search,
+  Send,
+  TowerControl,
+  X,
+} from "lucide-react";
 
 const UNDO_MS = 10_000;
+
+const NOTICE_TIP: Record<string, string> = {
+  live: "A new comment from a person or from Bugbot raises a desktop notification. Muting lasts until you reload.",
+  granted: "Muted. Click to hear about new comments again.",
+  default: "Notify me when a person or Bugbot comments on one of my PRs.",
+  denied: "Your browser is blocking notifications for this page. Allow them in its site settings.",
+};
+
+type Permission = NotificationPermission | "unsupported";
+
+function readPermission(): Permission {
+  return typeof Notification === "undefined" ? "unsupported" : Notification.permission;
+}
+
+/**
+ * Raises a desktop notification for each comment the server reports as new.
+ *
+ * The first snapshot a page receives is the baseline, never an announcement: it
+ * carries whatever the last refresh found, which on a reload is a conversation
+ * the reader has already had. Notifications come from the page rather than a
+ * service worker — the app deliberately registers none, and desktop Chromium
+ * does not need one to show a notification.
+ */
+function useArrivals(alerts: CommentAlert[] | undefined, live: boolean) {
+  const seen = useRef<Set<string> | null>(null);
+  // Read through a ref so muting takes effect without the effect re-running
+  // over an unchanged list.
+  const on = useRef(live);
+  on.current = live;
+
+  useEffect(() => {
+    if (!alerts) return;
+    if (!seen.current) {
+      seen.current = new Set(alerts.map((alert) => alert.id));
+      return;
+    }
+
+    const fresh = unseen(alerts, seen.current);
+    for (const alert of fresh) seen.current.add(alert.id);
+    if (!on.current || readPermission() !== "granted") return;
+
+    for (const notice of fresh.map(noticeFor)) {
+      const shown = new Notification(notice.title, {
+        body: notice.body,
+        // Same-origin, which is all the page's own CSP allows.
+        icon: "/icon-192.png",
+        tag: notice.tag,
+      });
+      shown.onclick = () => {
+        window.focus();
+        window.open(notice.url, "_blank", "noopener");
+        shown.close();
+      };
+    }
+  }, [alerts]);
+}
+
+function prose(stages: Set<Stage>): string {
+  const words = [...stages].map((stage) => STAGE_PROSE[stage]);
+  if (words.length < 2) return words.join("");
+  return `${words.slice(0, -1).join(", ")} or ${words[words.length - 1]}`;
+}
 
 function useSystemTheme() {
   useEffect(() => {
@@ -61,17 +139,33 @@ function App() {
 
   const seenAt = useRef(0);
   const [query, setQuery] = useState("");
+  const [stages, setStages] = useState<Set<Stage>>(new Set());
   const [searching, setSearching] = useState(false);
   const search = useRef<HTMLInputElement>(null);
+  const filtering = query.length > 0 || stages.size > 0;
 
   const [picked, setPicked] = useState<Set<number>>(new Set());
   const [pending, setPending] = useState<Item[] | null>(null);
   const [busy, setBusy] = useState<Set<number>>(new Set());
 
+  // The browser's own permission is the switch that survives a reload; the mute
+  // lasts for this page only, because nothing is stored in the browser.
+  const [permission, setPermission] = useState<Permission>(readPermission);
+  const [muted, setMuted] = useState(false);
+  const live = permission === "granted" && !muted;
+  useArrivals(snapshot?.alerts, live);
+
   const model = useMemo(
     () =>
-      buildModel(snapshot?.prs ?? [], snapshot?.issues ?? [], snapshot?.rollups ?? [], undefined, query),
-    [snapshot, query],
+      buildModel(
+        snapshot?.prs ?? [],
+        snapshot?.issues ?? [],
+        snapshot?.rollups ?? [],
+        undefined,
+        query,
+        [...stages],
+      ),
+    [snapshot, query, stages],
   );
 
   const refresh = useCallback(async (force: boolean) => {
@@ -128,6 +222,18 @@ function App() {
         event.preventDefault();
         search.current?.focus();
       }
+      // Cmd/Ctrl+F opens and closes the filter. This takes the browser's own
+      // find-in-page away from this page, which is the point: on a board of
+      // rows the app's filter is the one that answers "where is that PR".
+      if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === "f") {
+        event.preventDefault();
+        if (document.activeElement === search.current) {
+          setQuery("");
+          search.current?.blur();
+        } else {
+          search.current?.focus();
+        }
+      }
       if (event.key === "Escape" && target === search.current) {
         setQuery("");
         search.current?.blur();
@@ -150,6 +256,25 @@ function App() {
     } finally {
       setSetupBusy(false);
     }
+  }
+
+  function clearFilter() {
+    setQuery("");
+    setStages(new Set());
+  }
+
+  function toggleStage(stage: Stage) {
+    setStages((current) => {
+      const next = new Set(current);
+      if (!next.delete(stage)) next.add(stage);
+      return next;
+    });
+  }
+
+  async function toggleNotices() {
+    // Chromium grants the prompt only from a gesture, which a click is.
+    if (permission === "default") return setPermission(await Notification.requestPermission());
+    if (permission === "granted") setMuted((current) => !current);
   }
 
   function markDraft(ids: Set<number>, draft: boolean) {
@@ -254,7 +379,7 @@ function App() {
           <span className="font-semibold tracking-tight">PR Tower</span>
           {snapshot ? (
             <span className="text-muted-foreground hidden font-mono text-xs sm:inline">
-              {query
+              {filtering
                 ? `${model.counts.shown} of ${model.counts.total}`
                 : `${model.counts.total} open`}{" "}
               · {repos} {repos === 1 ? "repo" : "repos"} · synced {timeAgo(snapshot.at)}
@@ -308,6 +433,22 @@ function App() {
             ) : null}
           </div>
 
+          {permission === "unsupported" ? null : (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={toggleNotices}
+                  aria-label={live ? "Mute comment notifications" : "Notify me about new comments"}
+                >
+                  {live ? <Bell className="size-3.5" /> : <BellOff className="size-3.5" />}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{NOTICE_TIP[live ? "live" : permission]}</TooltipContent>
+            </Tooltip>
+          )}
+
           <Button
             variant="ghost"
             size="sm"
@@ -343,18 +484,40 @@ function App() {
           </div>
         ) : null}
 
-        {snapshot && query && model.items.length === 0 ? (
-          <div className="text-muted-foreground py-20 text-center text-sm">
-            Nothing matches <span className="text-foreground font-mono">{query}</span>.
+        {snapshot ? (
+          <Stages
+            counts={model.stageCounts}
+            picked={stages}
+            onToggle={toggleStage}
+            onClear={() => setStages(new Set())}
+          />
+        ) : null}
+
+        {snapshot && filtering && model.items.length === 0 ? (
+          <div className="text-muted-foreground space-y-3 py-20 text-center text-sm">
+            <p>
+              {query ? (
+                <>
+                  Nothing{stages.size > 0 ? " matching" : " matches"}{" "}
+                  <span className="text-foreground font-mono">{query}</span>
+                </>
+              ) : (
+                <>Nothing</>
+              )}
+              {stages.size > 0 ? ` is ${prose(stages)}` : null}.
+            </p>
+            <Button variant="outline" size="sm" onClick={clearFilter}>
+              Clear the filter
+            </Button>
           </div>
         ) : null}
 
-        {snapshot && !(query && model.items.length === 0) ? (
+        {snapshot && !(filtering && model.items.length === 0) ? (
           <>
             {/* While filtering, an empty queue is answering a question nobody
-                asked — the search is about finding a PR, not about what is
+                asked — the filter is about finding a PR, not about what is
                 ready. */}
-            {!query || model.queue.length > 0 ? <Queue model={model} handlers={handlers} /> : null}
+            {!filtering || model.queue.length > 0 ? <Queue model={model} handlers={handlers} /> : null}
 
             {model.bays.length > 0 ? (
               <section className="space-y-3">

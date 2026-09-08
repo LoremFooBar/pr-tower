@@ -10,6 +10,10 @@ const fixture = JSON.parse(
   readFileSync(process.env.FIXTURE ?? resolve(here, "fixture.demo.json"), "utf8"),
 );
 
+// Comment ids come from three sequences at GitHub and from one here, which is
+// enough: the server qualifies each id with the surface it arrived on.
+let commentId = 1000;
+
 const json = (res, body) => {
   res.writeHead(200, { "content-type": "application/json" });
   res.end(JSON.stringify(body));
@@ -57,7 +61,51 @@ createServer(async (req, res) => {
   if (m) return json(res, fixture.details[`${m[1]}/${m[2]}/${m[3]}`] ?? {});
 
   m = path.match(/^\/repos\/([^/]+)\/([^/]+)\/pulls\/(\d+)\/reviews$/);
-  if (m) return json(res, fixture.reviews[`${m[1]}/${m[2]}/${m[3]}`] ?? []);
+  if (m) {
+    const rows = fixture.reviews[`${m[1]}/${m[2]}/${m[3]}`] ?? [];
+    // A review submitted with a message is also a comment, and the server reads
+    // its timestamp against the last sweep — stamped on the way out so every
+    // sweep sees it as new, however many have run before.
+    return json(
+      res,
+      rows.map((row) => {
+        if (!row.body) return row;
+        const id = ++commentId;
+        return {
+          ...row,
+          id,
+          submitted_at: new Date().toISOString(),
+          html_url: `https://github.com/${m[1]}/${m[2]}/pull/${m[3]}#pullrequestreview-${id}`,
+        };
+      }),
+    );
+  }
+
+  // Both comment surfaces answer per repository, which is why a sweep costs two
+  // calls however many open PRs the repository holds. The `since` filter is
+  // ignored here for the same reason the reviews above are restamped.
+  m = path.match(/^\/repos\/([^/]+)\/([^/]+)\/(issues|pulls)\/comments$/);
+  if (m) {
+    const repo = `${m[1]}/${m[2]}`;
+    const rows = fixture.comments?.[m[3]]?.[repo] ?? [];
+    const field = m[3] === "issues" ? "issue_url" : "pull_request_url";
+    return json(
+      res,
+      rows.map((row) => {
+        const id = ++commentId;
+        const at = new Date().toISOString();
+        return {
+          id,
+          html_url: `https://github.com/${repo}/pull/${row.target}#comment-${id}`,
+          body: row.body,
+          created_at: at,
+          updated_at: at,
+          user: { login: row.login, type: row.type },
+          [field]: `http://localhost:5179/repos/${repo}/${m[3]}/${row.target}`,
+        };
+      }),
+    );
+  }
 
   // Oldest first, like GitHub, and relative to the PR's base — which is why a
   // child in a declared stack lists none of its parent's commits.

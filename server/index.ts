@@ -2,10 +2,17 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { convertToDraft, fetchMyOpenPRs, sendForReview, validateToken } from "./github";
+import {
+  convertToDraft,
+  fetchMyOpenPRs,
+  fetchNewComments,
+  groupComments,
+  sendForReview,
+  validateToken,
+} from "./github";
 import { fetchAssignedIssues, fetchEpicRollups, validateKey } from "./linear";
 import { envPinned, loadTokens, saveTokens } from "./config";
-import type { EpicRollup, LinearIssue, PullRequest } from "../src/core/types";
+import type { CommentAlert, EpicRollup, LinearIssue, PullRequest } from "../src/core/types";
 
 const PORT = Number(process.env.PORT ?? 5178);
 const here = dirname(fileURLToPath(import.meta.url));
@@ -37,12 +44,27 @@ const AUTO_MS = 5 * 60 * 1000;
 // laptop surfaces as an error the browser can reconnect from.
 const BEAT_MS = 25 * 1000;
 
+// How many comment keys are carried between refreshes to stop an announcement
+// repeating. A sweep asks GitHub for `since` the last one, so the window that
+// can come back twice is minutes wide; this is generous for that.
+const SEEN_CAP = 400;
+
 interface Snapshot {
   prs: PullRequest[];
   issues: LinearIssue[];
   rollups: EpicRollup[];
   at: number;
   login: string;
+  /** Comments that arrived during the refresh that built this snapshot. */
+  alerts: CommentAlert[];
+  /**
+   * The instant the last comment sweep started, and the cursor for the next one.
+   * Absent until a first refresh has run: a board opened for the first time must
+   * not announce every comment already on the PRs.
+   */
+  commentsSince?: string;
+  /** Comment keys already announced. Server-side only; never sent to the page. */
+  commentsSeen?: string[];
 }
 
 let snapshot: Snapshot | null = readSnapshot();
@@ -138,9 +160,33 @@ function refresh(force: boolean): Promise<Snapshot> {
         ? await fetchEpicRollups(tokens.linearKey, parentUuids).catch(() => [] as EpicRollup[])
         : [];
 
-    const prs = await fetchMyOpenPRs(tokens.githubToken, user.login, tokens.org);
+    const { prs, notes } = await fetchMyOpenPRs(tokens.githubToken, user.login, tokens.org);
 
-    const next: Snapshot = { prs, issues, rollups, at: Date.now(), login: user.login };
+    // Started before the sweep, so a comment posted while it runs is newer than
+    // the cursor and is caught by the next one rather than falling in the gap.
+    const sweptAt = new Date().toISOString();
+    const since = snapshot?.commentsSince;
+    const seen = new Set(snapshot?.commentsSeen ?? []);
+
+    // A comment sweep must not be able to fail the refresh, and on the very
+    // first one there is no cursor to sweep from — only a baseline to set.
+    const swept = since
+      ? await fetchNewComments(tokens.githubToken, prs, since).catch(() => [])
+      : [];
+    const { alerts, keys } = since
+      ? groupComments([...swept, ...notes], prs, user.login, since, seen)
+      : { alerts: [] as CommentAlert[], keys: [] as string[] };
+
+    const next: Snapshot = {
+      prs,
+      issues,
+      rollups,
+      at: Date.now(),
+      login: user.login,
+      alerts,
+      commentsSince: sweptAt,
+      commentsSeen: [...new Set([...seen, ...keys])].slice(-SEEN_CAP),
+    };
     snapshot = next;
     writeSnapshot(next);
     announce(next.at);
@@ -203,6 +249,7 @@ const routes: Record<string, (req: IncomingMessage, res: ServerResponse, url: UR
         rollups: data.rollups,
         at: data.at,
         login: data.login,
+        alerts: data.alerts ?? [],
       });
     } catch (err) {
       send(res, 502, { error: err instanceof Error ? err.message : "Refresh failed." });

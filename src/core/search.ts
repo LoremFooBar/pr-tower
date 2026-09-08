@@ -1,4 +1,5 @@
-import type { Item } from "./types";
+import { stageOf } from "./rank";
+import type { Item, Stage } from "./types";
 
 // What a PR is findable by. The branch is left out on purpose: it repeats the
 // ticket key most of the time and would otherwise match a token the row never
@@ -25,4 +26,8 @@ export function matchesQuery(item: Item, query: string): boolean {
   if (tokens.length === 0) return true;
   const text = haystack(item);
   return tokens.every((token) => text.includes(token.replace(/^#/, "")));
+}
+
+export function matchesStages(item: Item, stages: readonly Stage[]): boolean {
+  return stages.length === 0 || stages.includes(stageOf(item));
 }

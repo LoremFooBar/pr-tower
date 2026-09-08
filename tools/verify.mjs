@@ -232,6 +232,81 @@ for (const theme of ["dark", "light"]) {
     console.log(`filter cleared          : ${restored} rows (was ${before})`);
     if (restored !== before) problems.push(`clearing left ${restored} rows, not ${before}`);
 
+    // Stage chips. They are toggles, not tabs: each one says how many PRs are at
+    // that stage, picking one narrows the board to exactly that many, and a
+    // second one widens rather than narrows.
+    const chip = (stage) => page.locator(`#app [data-stage="${stage}"]`);
+    const stageCount = async (stage) =>
+      Number(/(\d+)$/.exec((await chip(stage).textContent()) ?? "")?.[1] ?? -1);
+
+    const STAGES = ["merge", "ready", "needs", "review", "blocked"];
+    const shows = {};
+    for (const stage of STAGES) shows[stage] = await stageCount(stage);
+    const summed = STAGES.reduce((total, stage) => total + shows[stage], 0);
+    console.log(
+      `stage chips             : ${STAGES.map((s) => `${s} ${shows[s]}`).join(" · ")} = ${summed}`,
+    );
+    if (summed !== before) {
+      problems.push(`the stage chips add up to ${summed}, but the board has ${before} rows`);
+    }
+
+    const one = STAGES.find((stage) => shows[stage] > 0 && shows[stage] < before);
+    if (!one) problems.push("no stage held some but not all of the board; the chips prove nothing");
+    else {
+      await chip(one).click();
+      await page.waitForTimeout(250);
+      const narrowed = await rows();
+      console.log(`chip "${one}"`.padEnd(24) + `: ${narrowed} rows (chip says ${shows[one]})`);
+      if (narrowed !== shows[one]) {
+        problems.push(`the ${one} chip says ${shows[one]} but the board shows ${narrowed} rows`);
+      }
+      if ((await stageCount(one)) !== shows[one]) {
+        problems.push("picking a chip changed its own count");
+      }
+      const other = STAGES.find((stage) => stage !== one && shows[stage] > 0);
+      if (other) {
+        if ((await stageCount(other)) !== shows[other]) {
+          problems.push(`picking ${one} zeroed the ${other} chip`);
+        }
+        await chip(other).click();
+        await page.waitForTimeout(250);
+        const widened = await rows();
+        console.log(`chip + "${other}"`.padEnd(24) + `: ${widened} rows`);
+        if (widened !== shows[one] + shows[other]) {
+          problems.push(`two chips showed ${widened} rows, not ${shows[one] + shows[other]}`);
+        }
+      }
+      await page.screenshot({ path: `${out}/${theme}-stages.png`, fullPage: true });
+
+      await page.locator("#app [data-stage-clear]").click();
+      await page.waitForTimeout(250);
+      const back = await rows();
+      console.log(`chips cleared           : ${back} rows (was ${before})`);
+      if (back !== before) problems.push(`clearing the chips left ${back} rows, not ${before}`);
+    }
+
+    // Cmd/Ctrl+F opens the filter and closes it again, in place of the
+    // browser's own find-in-page.
+    const focusLabel = () => page.evaluate(() => document.activeElement?.getAttribute("aria-label"));
+    await page.keyboard.press("ControlOrMeta+f");
+    await page.waitForTimeout(200);
+    const opened = (await focusLabel()) === "Filter pull requests";
+    await page.keyboard.type("rollup");
+    await page.waitForTimeout(250);
+    const typed = await rows();
+    await page.keyboard.press("ControlOrMeta+f");
+    await page.waitForTimeout(250);
+    const shut = (await focusLabel()) !== "Filter pull requests";
+    const emptied = await rows();
+    console.log(
+      `cmd+F opens/closes      : ${opened ? "yes" : "NO"}/${shut ? "yes" : "NO"} · ` +
+        `${typed} rows while filtering, ${emptied} after`,
+    );
+    if (!opened) problems.push("Cmd+F did not put the cursor in the filter");
+    if (!shut) problems.push("Cmd+F a second time did not close the filter");
+    if (typed >= before) problems.push("typing after Cmd+F narrowed nothing");
+    if (emptied !== before) problems.push(`closing the filter left ${emptied} rows, not ${before}`);
+
     const server = await (await fetch(`http://localhost:${APP}/api/data`)).json();
     console.log(`server drafts remaining: ${server.prs.filter((pr) => pr.draft).length}`);
 
@@ -313,6 +388,138 @@ for (const theme of ["dark", "light"]) {
   else console.log(`sync signal delivered: ${frame.trim().split("\n").join(" ")}`);
   if (/ghp_|lin_api_/.test(frame)) problems.push("the event stream leaked a token");
   await reader.cancel();
+}
+
+// Desktop notifications. The page raises one per author per PR for the comments
+// the server reports as new, and says nothing about the bots nobody asked for or
+// about the reader's own remarks. The Notification constructor is replaced so
+// the test can read what would have been shown.
+{
+  const page = await browser.newPage({
+    viewport: { width: 1180, height: 900 },
+    permissions: ["notifications"],
+  });
+  page.on("pageerror", (error) => problems.push(`[notify] ${error}`));
+
+  await page.addInitScript(() => {
+    window.__notes = [];
+    class Stub {
+      constructor(title, options) {
+        window.__notes.push({ title, body: options?.body ?? "", tag: options?.tag ?? "" });
+      }
+      close() {}
+    }
+    Stub.permission = "granted";
+    Stub.requestPermission = () => Promise.resolve("granted");
+    Object.defineProperty(window, "Notification", {
+      value: Stub,
+      writable: true,
+      configurable: true,
+    });
+  });
+
+  await page.goto(`http://localhost:${APP}/`);
+  await page.getByRole("button", { name: /Ready to release/ }).waitFor({ timeout: 20000 });
+
+  // Whatever the page loaded with is its baseline. This sweep is the one it
+  // should speak about.
+  await fetch(`http://localhost:${APP}/api/data?force=1`);
+  await page.waitForTimeout(2500);
+
+  const notes = await page.evaluate(() => window.__notes ?? []);
+  const titles = notes.map((note) => note.title);
+  console.log(`comment notifications   : ${titles.length}`);
+  for (const title of titles) console.log(`  ${title}`);
+
+  // dana wrote one conversation comment and one review message on web #888.
+  // That is one thing that happened, so it is one notification saying two.
+  if (!titles.some((title) => /^dana commented on web #888 \(2\)$/.test(title))) {
+    problems.push("a person's comment and their review message did not arrive as one notification");
+  }
+  if (!titles.some((title) => /^Bugbot commented on web #\d+$/.test(title))) {
+    problems.push("Bugbot commented and the desktop was never told");
+  }
+  if (titles.some((title) => /coderabbit/i.test(title))) {
+    problems.push("a bot other than Bugbot raised a notification");
+  }
+  if (titles.some((title) => /^you commented/.test(title))) {
+    problems.push("the reader's own comment raised a notification");
+  }
+  if (notes.some((note) => !note.body)) problems.push("a notification carried no body");
+  if (new Set(notes.map((note) => note.tag)).size !== notes.length) {
+    problems.push("two notifications shared a tag and would replace each other");
+  }
+
+  // The control is one glyph in the header, and the mute is the same click back.
+  const mute = page.getByRole("button", { name: "Mute comment notifications" });
+  if ((await mute.count()) !== 1) problems.push("the notification control is missing");
+  else {
+    await mute.click();
+    const unmute = page.getByRole("button", { name: "Notify me about new comments" });
+    const flipped = (await unmute.count()) === 1;
+    console.log(`mute flips the control   : ${flipped ? "yes" : "NO"}`);
+    if (!flipped) problems.push("muting did not change the notification control");
+  }
+
+  await page.close();
+}
+
+// Opening a PR with no extension installed. The test browser has none, so this
+// is the plain case: a real anchor, a real new tab, nothing intercepting. The
+// second half marks the page the way the extension does, to prove the marker is
+// what gates the interception rather than the click going through by luck.
+{
+  const page = await browser.newPage({ viewport: { width: 1180, height: 900 } });
+  page.on("pageerror", (error) => problems.push(`[prhub] ${error}`));
+  const context = page.context();
+  // github.com is answered locally: this harness must not need the internet.
+  await context.route("https://github.com/**", (route) =>
+    route.fulfill({ status: 200, contentType: "text/html", body: "<title>stub</title>" }),
+  );
+
+  await page.goto(`http://localhost:${APP}/`);
+  await page.locator("#app [data-pr]").first().waitFor({ timeout: 20000 });
+
+  const marked = await page.evaluate(() => document.documentElement.dataset.prHub ?? null);
+  console.log(`pr-hub marker present   : ${marked ?? "no"}`);
+  if (marked) problems.push("the test browser claims the PR Hub extension is installed");
+
+  const link = page.locator("#app a[href^='https://github.com/'][href*='/pull/']").first();
+  const href = await link.getAttribute("href");
+  const attrs = await link.evaluate((node) => ({ target: node.target, rel: node.rel }));
+  console.log(`pr link                 : ${attrs.target} ${attrs.rel} ${href}`);
+  if (attrs.target !== "_blank") problems.push("a PR link does not open in a new tab");
+  if (!attrs.rel.includes("noreferrer")) problems.push("a PR link leaks a referrer");
+
+  const opened = await Promise.all([
+    context.waitForEvent("page", { timeout: 10000 }).catch(() => null),
+    link.click(),
+  ]).then(([tab]) => tab);
+  console.log(`plain click opens       : ${opened ? opened.url() : "NOTHING"}`);
+  if (!opened) problems.push("a plain click opened no tab with no extension installed");
+  else {
+    if (opened.url() !== href) problems.push(`the click landed on ${opened.url()}, not the PR`);
+    await opened.close();
+  }
+
+  // Now the positive control: mark the page as the extension does.
+  await page.evaluate(() => {
+    document.documentElement.dataset.prHub = "1";
+    window.__prhub = null;
+    window.addEventListener("message", (event) => {
+      if (event.data?.type === "prhub:open-pr") window.__prhub = event.data;
+    });
+  });
+  const tabsBefore = context.pages().length;
+  await link.click();
+  await page.waitForTimeout(600);
+  const handed = await page.evaluate(() => window.__prhub);
+  const tabsAfter = context.pages().length;
+  console.log(`marked click hands over : ${handed ? handed.url : "NO"} · tabs ${tabsBefore}→${tabsAfter}`);
+  if (!handed) problems.push("with the marker set, the click was not handed to the extension");
+  if (tabsAfter !== tabsBefore) problems.push("with the marker set, the click still opened a tab");
+
+  await page.close();
 }
 
 await browser.close();
