@@ -214,7 +214,8 @@ echo 'NPM_REGISTRY=https://your-mirror.example/npm/' > .env
 pnpm docker:up
 ```
 
-`.env` is git-ignored. A pre-commit hook (`scripts/normalize-lockfile.sh`)
-rewrites a mirror URL back to `registry.npmjs.org` if one ever reaches a
-lockfile, and refuses the commit if an internal host appears in any other staged
-file.
+`.env` is git-ignored. A pre-commit hook (`scripts/normalize-lockfile.sh`) reads
+your mirror from `npm config get registry`, rewrites it back to
+`registry.npmjs.org` if it ever reaches a lockfile, and refuses the commit if it
+appears in any other staged file. It does nothing if you install from the public
+registry.
