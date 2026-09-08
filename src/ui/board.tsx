@@ -67,6 +67,9 @@ const STAGE_DOT: Record<Stage, string> = {
   blocked: "ring-muted-foreground/60 ring-1 ring-inset",
 };
 
+const MODIFIER =
+  typeof navigator !== "undefined" && /mac/i.test(navigator.platform) ? "\u2318" : "Ctrl";
+
 /**
  * Toggles, not tabs: none picked is the whole board, and picking two widens
  * rather than navigates. The counts are of everything the text filter leaves,
@@ -75,12 +78,12 @@ const STAGE_DOT: Record<Stage, string> = {
 export function Stages({
   counts,
   picked,
-  onToggle,
+  onPick,
   onClear,
 }: {
   counts: Record<Stage, number>;
   picked: Set<Stage>;
-  onToggle(stage: Stage): void;
+  onPick(stage: Stage, additive: boolean): void;
   onClear(): void;
 }) {
   return (
@@ -95,7 +98,8 @@ export function Stages({
             data-stage={stage}
             aria-pressed={on}
             disabled={count === 0 && !on}
-            onClick={() => onToggle(stage)}
+            title={`Show only ${STAGE_PROSE[stage]}. Hold ${MODIFIER} to add a stage.`}
+            onClick={(event) => onPick(stage, event.metaKey || event.ctrlKey)}
             className={cn(
               "flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors",
               on

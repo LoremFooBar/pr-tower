@@ -14,6 +14,7 @@ import {
   type Status,
 } from "@/core/api";
 import { noticeFor, unseen } from "@/core/notify";
+import { nextStages } from "@/core/search";
 import { timeAgo } from "@/core/store";
 import { cn } from "@/lib/utils";
 import { stripTicketPrefix } from "@/core/link";
@@ -263,12 +264,8 @@ function App() {
     setStages(new Set());
   }
 
-  function toggleStage(stage: Stage) {
-    setStages((current) => {
-      const next = new Set(current);
-      if (!next.delete(stage)) next.add(stage);
-      return next;
-    });
+  function pickStage(stage: Stage, additive: boolean) {
+    setStages((current) => nextStages(current, stage, additive));
   }
 
   async function toggleNotices() {
@@ -488,7 +485,7 @@ function App() {
           <Stages
             counts={model.stageCounts}
             picked={stages}
-            onToggle={toggleStage}
+            onPick={pickStage}
             onClear={() => setStages(new Set())}
           />
         ) : null}

@@ -5,6 +5,7 @@ import { authorKind, groupComments, latestPerName, resolveChecks } from "../serv
 import type { RawComment } from "../server/github";
 import { noticeFor, unseen } from "../src/core/notify";
 import { prLink } from "../src/lib/prhub";
+import { nextStages } from "../src/core/search";
 import type { CommentAlert, LinearIssue, PullRequest, Stage } from "../src/core/types";
 
 const NOW = new Date("2026-08-26T12:00:00Z").getTime();
@@ -1031,6 +1032,40 @@ describe("grouping comments", () => {
       new Set(),
     );
     expect(alerts[0].excerpt).toBe("Bug: the tenant id is dropped here.");
+  });
+});
+
+describe("picking a stage", () => {
+  const set = (...stages: Stage[]) => new Set<Stage>(stages);
+  const sorted = (s: Set<Stage>) => [...s].sort();
+
+  it("keeps only the stage clicked", () => {
+    expect(sorted(nextStages(set(), "ready", false))).toEqual(["ready"]);
+    expect(sorted(nextStages(set("review"), "ready", false))).toEqual(["ready"]);
+    expect(sorted(nextStages(set("review", "blocked"), "ready", false))).toEqual(["ready"]);
+  });
+
+  it("turns the last one off again, so the whole board is one click away", () => {
+    expect(sorted(nextStages(set("ready"), "ready", false))).toEqual([]);
+  });
+
+  it("keeps a plain click on one of several as a narrowing, not a clearing", () => {
+    expect(sorted(nextStages(set("ready", "review"), "ready", false))).toEqual(["ready"]);
+  });
+
+  it("adds and removes when the modifier is held", () => {
+    expect(sorted(nextStages(set("ready"), "review", true))).toEqual(["ready", "review"]);
+    expect(sorted(nextStages(set("ready", "review"), "review", true))).toEqual(["ready"]);
+  });
+
+  it("leaves nothing selected when the modifier removes the last one", () => {
+    expect(sorted(nextStages(set("ready"), "ready", true))).toEqual([]);
+  });
+
+  it("does not mutate the set it was given", () => {
+    const current = set("ready");
+    nextStages(current, "review", true);
+    expect(sorted(current)).toEqual(["ready"]);
   });
 });
 

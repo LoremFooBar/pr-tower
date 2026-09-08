@@ -57,10 +57,12 @@ A strip of **stage chips** sits above the queue, each with a count:
 ● to merge 1   ● ready 3   ● need you 3   ● in review 1   ○ blocked 1
 ```
 
-Click one to narrow the board to that stage; click a second to see both. None
-picked is the whole board. They are filters, not tabs — the page underneath does
-not change, and the header keeps saying `4 of 9` so you always know what is
-hidden.
+Click one to see only that stage. Click it again to go back to the whole board.
+Hold `Cmd` (or `Ctrl`) while clicking to add a second stage rather than replace
+the first.
+
+They are filters, not tabs — the page underneath does not change, and the header
+keeps saying `4 of 9` so you always know what is hidden.
 
 The text filter next to Sync searches the title, the repo, `#number`, the ticket
 and the epic. Every word has to match, so a second word narrows the result.

@@ -251,8 +251,13 @@ for (const theme of ["dark", "light"]) {
     }
 
     const one = STAGES.find((stage) => shows[stage] > 0 && shows[stage] < before);
-    if (!one) problems.push("no stage held some but not all of the board; the chips prove nothing");
-    else {
+    const other = STAGES.find(
+      (stage) => stage !== one && shows[stage] > 0 && shows[stage] < before,
+    );
+    if (!one || !other) {
+      problems.push("fewer than two stages hold part of the board; the chips prove nothing");
+    } else {
+      // A plain click keeps only that stage.
       await chip(one).click();
       await page.waitForTimeout(250);
       const narrowed = await rows();
@@ -260,24 +265,50 @@ for (const theme of ["dark", "light"]) {
       if (narrowed !== shows[one]) {
         problems.push(`the ${one} chip says ${shows[one]} but the board shows ${narrowed} rows`);
       }
-      if ((await stageCount(one)) !== shows[one]) {
-        problems.push("picking a chip changed its own count");
+      if ((await stageCount(one)) !== shows[one]) problems.push("picking a chip changed its own count");
+      if ((await stageCount(other)) !== shows[other]) {
+        problems.push(`picking ${one} zeroed the ${other} chip`);
       }
-      const other = STAGES.find((stage) => stage !== one && shows[stage] > 0);
-      if (other) {
-        if ((await stageCount(other)) !== shows[other]) {
-          problems.push(`picking ${one} zeroed the ${other} chip`);
-        }
-        await chip(other).click();
-        await page.waitForTimeout(250);
-        const widened = await rows();
-        console.log(`chip + "${other}"`.padEnd(24) + `: ${widened} rows`);
-        if (widened !== shows[one] + shows[other]) {
-          problems.push(`two chips showed ${widened} rows, not ${shows[one] + shows[other]}`);
-        }
+
+      // A second plain click replaces the first rather than adding to it.
+      await chip(other).click();
+      await page.waitForTimeout(250);
+      const replaced = await rows();
+      console.log(`plain click "${other}"`.padEnd(24) + `: ${replaced} rows (replaces, want ${shows[other]})`);
+      if (replaced !== shows[other]) {
+        problems.push(`a plain second click showed ${replaced} rows, not ${shows[other]}`);
+      }
+
+      // The modifier adds instead.
+      await chip(one).click({ modifiers: ["ControlOrMeta"] });
+      await page.waitForTimeout(250);
+      const widened = await rows();
+      console.log(`cmd-click "${one}"`.padEnd(24) + `: ${widened} rows (adds, want ${shows[one] + shows[other]})`);
+      if (widened !== shows[one] + shows[other]) {
+        problems.push(`the modifier gave ${widened} rows, not ${shows[one] + shows[other]}`);
       }
       await page.screenshot({ path: `${out}/${theme}-stages.png`, fullPage: true });
 
+      // The modifier takes one back out.
+      await chip(one).click({ modifiers: ["ControlOrMeta"] });
+      await page.waitForTimeout(250);
+      const removed = await rows();
+      if (removed !== shows[other]) {
+        problems.push(`the modifier removed a stage and left ${removed} rows, not ${shows[other]}`);
+      }
+
+      // Clicking the only stage that is on turns it off, so the board comes back
+      // without reaching for Clear.
+      await chip(other).click();
+      await page.waitForTimeout(250);
+      const off = await rows();
+      console.log(`click the only one on`.padEnd(24) + `: ${off} rows (was ${before})`);
+      if (off !== before) problems.push(`turning the last chip off left ${off} rows, not ${before}`);
+
+      // Clear still works from a multiple selection.
+      await chip(one).click();
+      await chip(other).click({ modifiers: ["ControlOrMeta"] });
+      await page.waitForTimeout(250);
       await page.locator("#app [data-stage-clear]").click();
       await page.waitForTimeout(250);
       const back = await rows();

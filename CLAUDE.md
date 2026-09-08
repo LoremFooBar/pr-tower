@@ -337,11 +337,16 @@ token no row shows, which reads as a wrong result.
 **The stage chips are the other half of the same filter.** A strip above the
 queue — `to merge · ready · need you · in review · blocked`, each with a count.
 
-- **They are toggles, not tabs, and that distinction is the whole reason they
-  are allowed.** Nothing picked is the whole board, and picking a second chip
-  *widens* the result. Tabs were rejected because they made readiness the
-  navigation axis and hid everything else; these narrow a page that is otherwise
-  unchanged, exactly as the text filter does.
+- **A plain click keeps only that stage; Cmd or Ctrl adds one.** `nextStages`
+  (`src/core/search.ts`) is the rule. One click answers "what is on me right
+  now", which is what the strip is for, and clicking the only stage that is on
+  turns it off — so the whole board is always one click away without reaching
+  for Clear. The modifier is the one a file list uses for the same job.
+- **They are not tabs, and that distinction is the whole reason they are
+  allowed.** Nothing picked is the whole board, a held modifier *widens* the
+  result, and the page underneath never changes. Tabs were rejected because they
+  made readiness the navigation axis and hid everything else; these narrow a page
+  that is otherwise unchanged, exactly as the text filter does.
 - **`stageOf` (`src/core/rank.ts`) is the only definition.** The chips, the bay
   header counts and the spine all read it, so the three can never disagree. It
   is a reading of the lane and the signals: `lane` says what the app can do with

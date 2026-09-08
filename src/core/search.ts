@@ -31,3 +31,25 @@ export function matchesQuery(item: Item, query: string): boolean {
 export function matchesStages(item: Item, stages: readonly Stage[]): boolean {
   return stages.length === 0 || stages.includes(stageOf(item));
 }
+
+/**
+ * What the stage selection becomes when a chip is clicked.
+ *
+ * A plain click keeps only that stage, which is what the strip is for: one
+ * click to answer "what is on me right now". Clicking the only stage that is on
+ * turns it off again, so the whole board is always one click away without
+ * reaching for Clear. Cmd or Ctrl adds and removes instead, the same modifier a
+ * file list uses for the same job.
+ */
+export function nextStages(
+  current: ReadonlySet<Stage>,
+  stage: Stage,
+  additive: boolean,
+): Set<Stage> {
+  if (additive) {
+    const next = new Set(current);
+    if (!next.delete(stage)) next.add(stage);
+    return next;
+  }
+  return current.size === 1 && current.has(stage) ? new Set() : new Set([stage]);
+}
