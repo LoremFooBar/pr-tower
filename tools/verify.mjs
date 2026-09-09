@@ -377,6 +377,51 @@ for (const theme of ["dark", "light"]) {
     console.log(`superseded run reads as : ${/#900/.test(superseded ?? "") ? "a row" : "MISSING"}`);
     if (!/#900/.test(superseded ?? "")) problems.push("the superseded PR never reached the strip");
 
+    // A Dependabot run is named after its own commit message and reaches eighty
+    // characters. Left whole it takes the row and squeezes the title to one
+    // letter, so the label is cut and the overflow is counted.
+    const labels = await page.locator("#app [data-merged-pr] [data-step]").allTextContents();
+    const longest = labels.reduce((most, text) => Math.max(most, text.length), 0);
+    console.log(`longest pill label      : ${longest} chars (cap 28)`);
+    if (longest > 28) problems.push(`a pill label ran to ${longest} characters`);
+
+    const perRow = [];
+    for (let i = 0; i < count; i++) {
+      perRow.push(await mergedRows.nth(i).locator("[data-step]").count());
+    }
+    console.log(`pills per row           : ${perRow.join(", ")} (cap 3)`);
+    if (perRow.some((n) => n > 3)) problems.push("a row rendered more than three pills");
+    // Four runs on that PR: three pills and a count, never three pills alone.
+    const overflowed = await page.locator("#app [data-merged-pr]", { hasText: "#700" }).textContent();
+    if (!/\+1/.test(overflowed ?? "")) problems.push("the extra run was dropped instead of counted");
+
+    // The title keeps a floor, or the pills crush it to an ellipsis.
+    const titleBox = await page
+      .locator("#app [data-merged-pr]", { hasText: "#700" })
+      .locator("a")
+      .first()
+      .boundingBox();
+    console.log(`title width on that row : ${Math.round(titleBox?.width ?? 0)}px`);
+    if ((titleBox?.width ?? 0) < 100) problems.push("the pills squeezed the merged title away");
+
+    // Merged PRs also sit under their ticket, so a bay shows the whole effort
+    // rather than only the part still open.
+    const underTicket = await page.locator("#app [data-merged-row]").count();
+    console.log(`merged rows in the bays : ${underTicket}`);
+    if (underTicket === 0) problems.push("no merged PR appeared under its ticket");
+
+    // Releasing a whole bay is a header action now. The demo board has no bay
+    // with two ready PRs, so what is checkable here is that the button never
+    // takes a row of its own inside the panel.
+    const inPanel = await page
+      .locator("#app [data-bay-panel]")
+      .getByRole("button", { name: /^Release all/ })
+      .count();
+    const headers = await page.locator("#app [data-bay-header]").count();
+    console.log(`bay headers / panel release-all : ${headers} / ${inPanel}`);
+    if (headers === 0) problems.push("the bay header lost its marker");
+    if (inPanel > 0) problems.push("the bay's release-all button is still a row of its own");
+
     // The filter reaches merged PRs too, or a search for one says "nothing".
     const mergeFilter = page.getByLabel("Filter pull requests");
     await mergeFilter.fill("cookie");

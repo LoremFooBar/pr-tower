@@ -15,7 +15,7 @@ import type {
   PullRequest,
   Stage,
 } from "../src/core/types";
-import { blocker, isLive, mergedLine, mergedView } from "../src/core/merged";
+import { blocker, isLive, mergedLine, mergedView, stepLabel } from "../src/core/merged";
 
 const NOW = new Date("2026-08-26T12:00:00Z").getTime();
 
@@ -1359,5 +1359,97 @@ describe("merged pull requests", () => {
       });
       expect(blocker(pr)?.name).toBe("production");
     });
+  });
+});
+
+describe("what a step is called", () => {
+  const label = (name: string, kind: DeployStep["kind"] = "workflow") =>
+    stepLabel({ kind, name, state: "ok" });
+
+  it("leaves an environment alone", () => {
+    expect(label("production", "environment")).toBe("production");
+  });
+
+  it("drops the words every pipeline is called", () => {
+    expect(label("Main CI/CD Pipeline")).toBe("Main CI/CD");
+    expect(label("Main content Deployment Pipeline")).toBe("Main content");
+  });
+
+  it("drops a trailing run number, which the link already carries", () => {
+    expect(label("Configured Graph Update: go_modules in /. #1559439343")).not.toMatch(/1559439343/);
+  });
+
+  // Dependabot names a run after its own commit message.
+  it("cuts a generated name before it takes the row", () => {
+    const cut = label(
+      "go_modules in /investigation-templates/.ci for google.golang.org/grpc - Update #1551702762",
+    );
+    expect(cut.length).toBeLessThanOrEqual(28);
+    expect(cut.endsWith("…")).toBe(true);
+  });
+
+  it("keeps a name a person wrote", () => {
+    expect(label("Template Reference Check")).toBe("Template Reference Check");
+  });
+
+  it("never returns nothing, however much it strips", () => {
+    expect(label("Deploy")).toBe("Deploy");
+  });
+});
+
+describe("merged PRs under their ticket", () => {
+  const shipped = (over: Partial<MergedPR>): MergedPR => ({
+    id: Math.random(),
+    number: 1,
+    title: "[ACME-1] Shipped",
+    url: "https://github.com/acme/web/pull/1",
+    owner: "acme",
+    repo: "web",
+    mergedAt: "2026-08-20T10:00:00Z",
+    mergeSha: "abc",
+    steps: [],
+    state: "ok",
+    ...over,
+  });
+
+  const board = (merged: MergedPR[]) =>
+    buildModel(
+      [pr({ number: 10, title: "[ACME-1] Still open" })],
+      [issue("ACME-1")],
+      [],
+      NOW,
+      "",
+      [],
+      merged,
+    );
+
+  it("attaches a merged PR to the ticket that is on the board", () => {
+    const model = board([shipped({ number: 9, issueKey: "ACME-1" })]);
+    expect(model.mergedByTicket.get("ACME-1")?.map((m) => m.number)).toEqual([9]);
+  });
+
+  it("matches the ticket whatever case it was written in", () => {
+    const model = board([shipped({ number: 9, issueKey: "acme-1" })]);
+    expect(model.mergedByTicket.get("ACME-1")?.map((m) => m.number)).toEqual([9]);
+  });
+
+  // A ticket whose PRs have all merged is finished; its progress is the
+  // rollup's business, and a bay for it would be a section about nothing.
+  it("drops a merged PR whose ticket has nothing open", () => {
+    const model = board([shipped({ number: 9, issueKey: "ACME-999" })]);
+    expect(model.mergedByTicket.size).toBe(0);
+  });
+
+  it("drops a merged PR with no ticket at all", () => {
+    const model = board([shipped({ number: 9, issueKey: undefined })]);
+    expect(model.mergedByTicket.size).toBe(0);
+  });
+
+  it("puts the newest first under one ticket", () => {
+    const model = board([
+      shipped({ number: 8, issueKey: "ACME-1", mergedAt: "2026-08-18T10:00:00Z" }),
+      shipped({ number: 9, issueKey: "ACME-1", mergedAt: "2026-08-24T10:00:00Z" }),
+    ]);
+    expect(model.mergedByTicket.get("ACME-1")?.map((m) => m.number)).toEqual([9, 8]);
   });
 });

@@ -45,7 +45,7 @@ import "@/styles.css";
 import {
   Bell,
   BellOff,
-  KeyRound,
+  SlidersHorizontal,
   Loader2,
   RefreshCw,
   Search,
@@ -167,6 +167,7 @@ function App() {
         undefined,
         query,
         [...stages],
+        snapshot?.merged ?? [],
       ),
     [snapshot, query, stages],
   );
@@ -472,8 +473,8 @@ function App() {
             Sync
           </Button>
           <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => setShowSetup(true)}>
-            <KeyRound className="size-3.5" />
-            Keys
+            <SlidersHorizontal className="size-3.5" />
+            Settings
           </Button>
         </div>
       </header>
@@ -546,12 +547,18 @@ function App() {
                     // An epic with nothing to act on opens collapsed.
                     defaultOpen={group.lanes.send + group.lanes.held + group.lanes.merge > 0}
                     handlers={handlers}
+                    merged={model.mergedByTicket}
                   />
                 ))}
               </section>
             ) : null}
 
-            <Ledger title="Single tickets" items={model.singles} handlers={handlers} />
+            <Ledger
+              title="Single tickets"
+              items={model.singles}
+              handlers={handlers}
+              merged={model.mergedByTicket}
+            />
             <Ledger title="No linked ticket" items={model.noTicket} handlers={handlers} muted />
           </>
         ) : null}

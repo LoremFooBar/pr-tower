@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Group, Item, SpineCell, Stage } from "@/core/types";
+import type { Group, Item, MergedPR, SpineCell, Stage } from "@/core/types";
 import type { Model } from "@/core/model";
 import { stripTicketPrefix } from "@/core/link";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +12,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { cn } from "@/lib/utils";
 import { prLink } from "@/lib/prhub";
 import { priorityLabel, Row, Tie } from "./parts";
+import { MergedRow } from "./merged";
 import { ChevronRight, Send, Sparkles } from "lucide-react";
 
 export interface Handlers {
@@ -152,9 +153,7 @@ function Spine({ cells }: { cells: SpineCell[] }) {
   );
 }
 
-function pairsOf(group: Group) {
-  return group.tickets.map((ticket) => ticket.items);
-}
+
 
 export function Queue({ model, handlers }: { model: Model; handlers: Handlers }) {
   const cleared = model.queue;
@@ -288,14 +287,15 @@ export function Bay({
   group,
   defaultOpen,
   handlers,
+  merged,
 }: {
   group: Group;
   defaultOpen: boolean;
   handlers: Handlers;
+  merged?: Map<string, MergedPR[]>;
 }) {
   const [open, setOpen] = useState(defaultOpen);
-  const tickets = pairsOf(group);
-  const rows = tickets.flat();
+  const rows = group.tickets.flatMap((ticket) => ticket.items);
   const cleared = rows.filter((item) => item.lane === "send");
   const priority = priorityLabel(group.epic);
 
@@ -311,84 +311,97 @@ export function Bay({
   return (
     <Card className="gap-0 py-0">
       <Collapsible open={open} onOpenChange={setOpen}>
-        <CollapsibleTrigger asChild>
-          <button className="hover:bg-muted/40 flex w-full items-start gap-3 rounded-t-xl px-4 py-3.5 text-left transition-colors">
-            <ChevronRight
-              className={cn(
-                "text-muted-foreground mt-0.5 size-4 shrink-0 transition-transform",
-                open && "rotate-90",
-              )}
-            />
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2">
-                {group.epic ? (
-                  <span className="text-muted-foreground font-mono text-xs">{group.epic.id}</span>
-                ) : null}
-                <span className="truncate text-sm font-semibold">{group.title}</span>
-                {priority ? (
-                  <Badge
-                    variant={priority === "Urgent" ? "destructive" : "secondary"}
-                    className="text-[10px]"
-                  >
-                    {priority}
-                  </Badge>
-                ) : null}
-                {group.epic ? (
-                  <Badge variant="outline" className="text-[10px] font-normal">
-                    {group.epic.stateName}
-                  </Badge>
-                ) : null}
+        {/* The trigger cannot wrap the release button — a button inside a button
+            is not a button — so the header row is the wrapper and the trigger
+            covers everything except the action. */}
+        <div
+          data-bay-header
+          className="hover:bg-muted/40 flex items-start gap-3 rounded-t-xl px-4 py-3.5 transition-colors"
+        >
+          <CollapsibleTrigger asChild>
+            <button className="flex min-w-0 flex-1 items-start gap-3 text-left">
+              <ChevronRight
+                className={cn(
+                  "text-muted-foreground mt-0.5 size-4 shrink-0 transition-transform",
+                  open && "rotate-90",
+                )}
+              />
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  {group.epic ? (
+                    <span className="text-muted-foreground font-mono text-xs">{group.epic.id}</span>
+                  ) : null}
+                  <span className="truncate text-sm font-semibold">{group.title}</span>
+                  {priority ? (
+                    <Badge
+                      variant={priority === "Urgent" ? "destructive" : "secondary"}
+                      className="text-[10px]"
+                    >
+                      {priority}
+                    </Badge>
+                  ) : null}
+                  {group.epic ? (
+                    <Badge variant="outline" className="text-[10px] font-normal">
+                      {group.epic.stateName}
+                    </Badge>
+                  ) : null}
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                  <Spine cells={group.spine} />
+                  <span className="text-muted-foreground font-mono text-[11px]">{counts}</span>
+                </div>
               </div>
-              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
-                <Spine cells={group.spine} />
-                <span className="text-muted-foreground font-mono text-[11px]">{counts}</span>
-              </div>
-            </div>
-            <span
-              className={cn(
-                "shrink-0 text-xs",
-                group.move.kind === "release" || group.move.kind === "merge"
-                  ? "text-primary font-medium"
-                  : group.move.kind === "fix"
-                    ? "text-destructive"
-                    : "text-muted-foreground",
-              )}
+            </button>
+          </CollapsibleTrigger>
+
+          <span
+            className={cn(
+              "shrink-0 text-xs",
+              group.move.kind === "release" || group.move.kind === "merge"
+                ? "text-primary font-medium"
+                : group.move.kind === "fix"
+                  ? "text-destructive"
+                  : "text-muted-foreground",
+            )}
+          >
+            {group.move.kind === "waiting" ? group.move.text : `Next: ${group.move.text}`}
+          </span>
+
+          {cleared.length > 1 ? (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 shrink-0 gap-1.5 text-xs"
+              onClick={() => handlers.onRelease(cleared)}
             >
-              {group.move.kind === "waiting" ? group.move.text : `Next: ${group.move.text}`}
-            </span>
-          </button>
-        </CollapsibleTrigger>
+              <Send className="size-3" />
+              Release all {cleared.length}
+            </Button>
+          ) : null}
+        </div>
 
         <CollapsibleContent>
           <Separator />
-          <div className="space-y-0.5 p-2">
-            {cleared.length > 1 ? (
-              <div className="flex justify-end px-2 pt-1 pb-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-7 gap-1.5 text-xs"
-                  onClick={() => handlers.onRelease(cleared)}
-                >
-                  <Send className="size-3" />
-                  Release all ready ({cleared.length})
-                </Button>
-              </div>
-            ) : null}
-            {tickets.map((ticket) => (
-              <Tie key={ticket[0].pr.id} tied={ticket.length > 1}>
-                {ticket.map((item) => (
-                  <Row
-                    key={item.pr.id}
-                    item={item}
-                    paired={ticket.length > 1}
-                    picked={handlers.picked.has(item.pr.id)}
-                    onPick={() => handlers.onPick(item)}
-                    onRelease={() => handlers.onRelease([item])}
-                    busy={handlers.busy.has(item.pr.id)}
-                  />
+          <div data-bay-panel className="space-y-0.5 p-2">
+            {group.tickets.map((ticket) => (
+              <div key={ticket.items[0].pr.id}>
+                <Tie tied={ticket.items.length > 1}>
+                  {ticket.items.map((item) => (
+                    <Row
+                      key={item.pr.id}
+                      item={item}
+                      paired={ticket.items.length > 1}
+                      picked={handlers.picked.has(item.pr.id)}
+                      onPick={() => handlers.onPick(item)}
+                      onRelease={() => handlers.onRelease([item])}
+                      busy={handlers.busy.has(item.pr.id)}
+                    />
+                  ))}
+                </Tie>
+                {(merged?.get(ticket.key.toUpperCase()) ?? []).map((pr) => (
+                  <MergedRow key={pr.id} pr={pr} />
                 ))}
-              </Tie>
+              </div>
             ))}
           </div>
         </CollapsibleContent>
@@ -402,11 +415,13 @@ export function Ledger({
   items,
   handlers,
   muted,
+  merged,
 }: {
   title: string;
   items: Item[];
   handlers: Handlers;
   muted?: boolean;
+  merged?: Map<string, MergedPR[]>;
 }) {
   if (items.length === 0) return null;
 
@@ -427,20 +442,25 @@ export function Ledger({
       <Card className="gap-0 py-2">
         <CardContent className="space-y-0.5 px-2">
           {[...byTicket.values()].map((group) => (
-            <Tie key={group[0].pr.id} tied={group.length > 1}>
-              {group.map((item) => (
-                <Row
-                  key={item.pr.id}
-                  item={item}
-                  paired={group.length > 1}
-                  eyebrow={item.epicId}
-                  picked={handlers.picked.has(item.pr.id)}
-                  onPick={() => handlers.onPick(item)}
-                  onRelease={() => handlers.onRelease([item])}
-                  busy={handlers.busy.has(item.pr.id)}
-                />
+            <div key={group[0].pr.id}>
+              <Tie tied={group.length > 1}>
+                {group.map((item) => (
+                  <Row
+                    key={item.pr.id}
+                    item={item}
+                    paired={group.length > 1}
+                    eyebrow={item.epicId}
+                    picked={handlers.picked.has(item.pr.id)}
+                    onPick={() => handlers.onPick(item)}
+                    onRelease={() => handlers.onRelease([item])}
+                    busy={handlers.busy.has(item.pr.id)}
+                  />
+                ))}
+              </Tie>
+              {(merged?.get((group[0].issue?.id ?? "").toUpperCase()) ?? []).map((pr) => (
+                <MergedRow key={pr.id} pr={pr} />
               ))}
-            </Tie>
+            </div>
           ))}
         </CardContent>
       </Card>

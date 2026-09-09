@@ -231,7 +231,21 @@ sit together as a matched pair of one-line collapsibles.
   than an `Item` for this reason; a query that matches only a merged PR must not
   report "Nothing matches". That is the one place the strip touches the rest of
   the page.
-- **The window is configurable** on the Keys screen, clamped to 1–90 days.
+- **A merged PR also appears under its ticket**, in the bay or the ledger,
+  struck through and carrying only the gates it is still stuck at. That is what
+  makes a bay show the whole effort rather than the part still open. It is
+  attached by `mergedByTicket`, which only matches tickets already on the board:
+  a ticket whose PRs have all merged is finished, and a section for it would be
+  a section about nothing. The strip keeps its own copy — the queue already
+  duplicates rows the bays show, for the same reason.
+- **`stepLabel` is the one label rule**, used by the pill and by the collapsed
+  line so the two cannot disagree. It drops a trailing run number and the words
+  every pipeline is called, then cuts at 28 characters: a Dependabot run is
+  named after its own commit message and reaches eighty, which took the whole
+  row and squeezed the PR title to one letter. A row shows at most three pills
+  and counts the rest, unfinished ones first so a red one is never the step that
+  got counted away.
+- **The window is configurable** on the Settings screen, clamped to 1–90 days.
 
 ## Opening a PR in Chrome
 
@@ -310,6 +324,10 @@ left-click and post the URL to the extension, which brings the PR up in its
   leave the one that merges first looking unrelated to the chain it starts. The
   chain is walked in both directions, so the size is the whole stack rather than
   the part above any one PR.
+- **Releasing a whole bay is a header action.** It used to be a row of its own
+  above the PRs, which spent a full row on a button. The trigger cannot wrap it
+  — a button inside a button is not a button — so the header row is a plain
+  wrapper and the trigger covers everything except the action.
 - **PRs of one ticket land together.** They select as a pair and are tied by a
   bracket drawn *beside* the gutter, not in it: the gutter's own slot is taken by
   the release checkbox, which is exactly the row where the pairing matters most.

@@ -4,6 +4,7 @@ import type {
   Item,
   Lane,
   LinearIssue,
+  MergedPR,
   NextMove,
   PullRequest,
   SpineCell,
@@ -209,6 +210,13 @@ export interface Model {
   closest?: Item;
   counts: Record<string, number>;
   /**
+   * Merged PRs under the ticket they belong to, so a bay shows the whole effort
+   * rather than only the part still open. Keyed by upper-case ticket id, and
+   * only for tickets already on the board: a ticket whose PRs have all merged is
+   * finished, and its progress is the rollup's business.
+   */
+  mergedByTicket: Map<string, MergedPR[]>;
+  /**
    * Per stage, counted over everything the text query leaves — deliberately
    * before the stage filter, so picking one chip does not zero the others.
    */
@@ -222,6 +230,7 @@ export function buildModel(
   now = Date.now(),
   query = "",
   stages: readonly Stage[] = [],
+  merged: MergedPR[] = [],
 ): Model {
   const byParent = new Map(rollups.map((rollup) => [rollup.parentId, rollup]));
   const index = buildIssueIndex(issues);
@@ -424,7 +433,28 @@ export function buildModel(
   const counts: Record<string, number> = { total, shown: visible.length };
   for (const item of visible) counts[item.lane] = (counts[item.lane] ?? 0) + 1;
 
-  return { items: visible, bays, singles, noTicket, queue, closest, counts, stageCounts };
+  const onBoard = new Set([...byTicket.keys()].map((key) => key.toUpperCase()));
+  const mergedByTicket = new Map<string, MergedPR[]>();
+  for (const pr of merged) {
+    const key = pr.issueKey?.toUpperCase();
+    if (!key || !onBoard.has(key)) continue;
+    mergedByTicket.set(key, [...(mergedByTicket.get(key) ?? []), pr]);
+  }
+  for (const list of mergedByTicket.values()) {
+    list.sort((a, b) => Date.parse(b.mergedAt) - Date.parse(a.mergedAt));
+  }
+
+  return {
+    items: visible,
+    bays,
+    singles,
+    noTicket,
+    queue,
+    closest,
+    counts,
+    stageCounts,
+    mergedByTicket,
+  };
 }
 
 

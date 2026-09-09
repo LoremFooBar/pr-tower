@@ -68,8 +68,12 @@ gate names the environment and who has to approve it.
 cancelled because a later merge overtook it counts as shipped once that later run
 contains your commit.
 
-Anything still moving sorts to the top. The window is set on the Keys screen and
-trims finished rows only — a deploy that failed last week stays until you deal
+Merged PRs also show under their ticket in the bays, struck through and carrying
+only the gates they are still stuck at, so a bay shows the whole effort rather
+than the part still open.
+
+Anything still moving sorts to the top. The window is set on the Settings screen
+and trims finished rows only — a deploy that failed last week stays until you deal
 with it.
 
 ## Finding things
@@ -165,7 +169,7 @@ tokens cannot use the Search Issues API, so they will not work.
 without it you still see every PR, but no ticket, priority, or grouping, and the
 Path gate never shuts.
 
-Enter both on the Keys screen, or pin them from outside by uncommenting the
+Enter both on the Settings screen, or pin them from outside by uncommenting the
 `environment:` block in `docker-compose.yml`. A token supplied that way is used
 but never written to the volume, so it stays wherever you put it.
 

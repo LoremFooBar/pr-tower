@@ -58,7 +58,7 @@ export function Setup({ status, onSave, error, busy, onCancel }: SetupProps) {
             <TowerControl className="text-primary size-5" />
             <span className="font-semibold tracking-tight">PR Tower</span>
           </div>
-          <CardTitle>{first ? "Two keys and you're in" : "Keys"}</CardTitle>
+          <CardTitle>{first ? "Two keys and you're in" : "Settings"}</CardTitle>
           <CardDescription>
             These are held by the container, not by this page. The browser never receives them, and
             every call to GitHub and Linear is made server-side.

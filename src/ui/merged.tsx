@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { DeployState, DeployStep, MergedPR } from "@/core/types";
-import { blocker, isLive, mergedLine } from "@/core/merged";
+import { blocker, isLive, mergedLine, stepLabel } from "@/core/merged";
 import { stripTicketPrefix } from "@/core/link";
 import { timeAgo } from "@/core/store";
 import { Badge } from "@/components/ui/badge";
@@ -30,11 +30,22 @@ const SAYS: Record<DeployState, string> = {
   none: "not started",
 };
 
-// A workflow name is a sentence; an environment name is a word. Only the long
-// one needs shortening, and only for the pill — the tooltip says it in full.
-function short(step: DeployStep): string {
-  if (step.kind === "environment") return step.name;
-  return step.name.replace(/\b(pipeline|workflow|deployment|deploy)\b/gi, "").trim() || step.name;
+// Past this the row stops being a row. The rest are counted, not listed.
+const PILL_LIMIT = 3;
+
+/**
+ * The steps worth a pill: anything not finished first, so a red one is never the
+ * step that got counted away.
+ */
+function shown(steps: DeployStep[]): DeployStep[] {
+  if (steps.length <= PILL_LIMIT) return steps;
+  const moving = steps.filter((step) => step.state !== "ok" && step.state !== "none");
+  return [...moving, ...steps.filter((step) => !moving.includes(step))].slice(0, PILL_LIMIT);
+}
+
+function rest(steps: DeployStep[]): DeployStep[] {
+  const keep = shown(steps);
+  return steps.filter((step) => !keep.includes(step));
 }
 
 function Pill({ step }: { step: DeployStep }) {
@@ -46,12 +57,13 @@ function Pill({ step }: { step: DeployStep }) {
 
   const pill = (
     <span
+      data-step
       className={cn(
         "rounded-full border px-1.5 py-0.5 font-mono text-[10px] leading-none whitespace-nowrap",
         PILL[step.state],
       )}
     >
-      {short(step)}
+      {stepLabel(step)}
     </span>
   );
 
@@ -126,7 +138,7 @@ export function Merged({ view, days }: { view: MergedPR[]; days: number }) {
                       <a
                         {...prLink(pr.url)}
                         className={cn(
-                          "min-w-0 flex-1 truncate text-sm hover:underline",
+                          "min-w-[9rem] flex-1 truncate text-sm hover:underline",
                           live && "text-muted-foreground",
                         )}
                       >
@@ -144,7 +156,25 @@ export function Merged({ view, days }: { view: MergedPR[]; days: number }) {
                             no run
                           </Badge>
                         ) : (
-                          pr.steps.map((step, index) => <Pill key={index} step={step} />)
+                          <>
+                            {shown(pr.steps).map((step, index) => (
+                              <Pill key={index} step={step} />
+                            ))}
+                            {pr.steps.length > shown(pr.steps).length ? (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="text-muted-foreground font-mono text-[10px]">
+                                    +{pr.steps.length - shown(pr.steps).length}
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  {rest(pr.steps)
+                                    .map((step) => `${step.name} — ${SAYS[step.state]}`)
+                                    .join("\n")}
+                                </TooltipContent>
+                              </Tooltip>
+                            ) : null}
+                          </>
                         )}
                       </span>
 
@@ -165,5 +195,41 @@ export function Merged({ view, days }: { view: MergedPR[]; days: number }) {
         </CollapsibleContent>
       </section>
     </Collapsible>
+  );
+}
+
+/**
+ * A merged PR sitting under its ticket, in a bay or the ledger. Muted and not
+ * selectable: the work is done, and what is left to know is whether it shipped.
+ */
+export function MergedRow({ pr }: { pr: MergedPR }) {
+  const live = isLive(pr);
+  return (
+    <div
+      data-merged-row
+      className="flex items-center gap-3 rounded-md py-1 pr-2 pl-9 opacity-80"
+    >
+      <a
+        {...prLink(pr.url)}
+        className="text-muted-foreground min-w-[8rem] flex-1 truncate text-sm line-through decoration-1 hover:underline"
+      >
+        {stripTicketPrefix(pr.title)}
+      </a>
+      <span className="text-muted-foreground hidden shrink-0 font-mono text-[11px] sm:inline">
+        {pr.repo} #{pr.number}
+      </span>
+      <span className="flex shrink-0 items-center gap-1">
+        {live ? (
+          <span className="font-mono text-[10px] text-[var(--ok)]">merged · live</span>
+        ) : (
+          shown(pr.steps)
+            .filter((step) => step.state !== "ok")
+            .map((step, index) => <Pill key={index} step={step} />)
+        )}
+      </span>
+      <span className="text-muted-foreground w-14 shrink-0 text-right font-mono text-[11px]">
+        {timeAgo(Date.parse(pr.mergedAt))}
+      </span>
+    </div>
   );
 }
