@@ -15,12 +15,14 @@ import {
 } from "@/core/api";
 import { noticeFor, unseen } from "@/core/notify";
 import { nextStages } from "@/core/search";
+import { mergedView } from "@/core/merged";
 import { timeAgo } from "@/core/store";
 import { cn } from "@/lib/utils";
 import { stripTicketPrefix } from "@/core/link";
 import type { CommentAlert, Item, Stage } from "@/core/types";
 import { Setup } from "@/ui/setup";
 import { Bay, Ledger, Queue, Stages, STAGE_PROSE, type Handlers } from "@/ui/board";
+import { Merged } from "@/ui/merged";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -168,6 +170,15 @@ function App() {
       ),
     [snapshot, query, stages],
   );
+
+  const mergedShown = useMemo(
+    () => mergedView(snapshot?.merged ?? [], query),
+    [snapshot, query],
+  );
+
+  // A query that matches only a merged PR must not report "Nothing matches":
+  // the strip is part of the page the filter searches.
+  const nothing = filtering && model.items.length === 0 && mergedShown.length === 0;
 
   const refresh = useCallback(async (force: boolean) => {
     setLoading(true);
@@ -481,16 +492,7 @@ function App() {
           </div>
         ) : null}
 
-        {snapshot ? (
-          <Stages
-            counts={model.stageCounts}
-            picked={stages}
-            onPick={pickStage}
-            onClear={() => setStages(new Set())}
-          />
-        ) : null}
-
-        {snapshot && filtering && model.items.length === 0 ? (
+        {snapshot && nothing ? (
           <div className="text-muted-foreground space-y-3 py-20 text-center text-sm">
             <p>
               {query ? (
@@ -509,12 +511,25 @@ function App() {
           </div>
         ) : null}
 
-        {snapshot && !(filtering && model.items.length === 0) ? (
+        {snapshot && !nothing ? (
           <>
             {/* While filtering, an empty queue is answering a question nobody
                 asked — the filter is about finding a PR, not about what is
                 ready. */}
             {!filtering || model.queue.length > 0 ? <Queue model={model} handlers={handlers} /> : null}
+
+            {/* The two ends of the pipeline, read as a pair: what can go out,
+                and what went out. The chips below filter neither. */}
+            {!query || mergedShown.length > 0 ? (
+              <Merged view={mergedShown} days={status?.mergedDays ?? 7} />
+            ) : null}
+
+            <Stages
+              counts={model.stageCounts}
+              picked={stages}
+              onPick={pickStage}
+              onClear={() => setStages(new Set())}
+            />
 
             {model.bays.length > 0 ? (
               <section className="space-y-3">

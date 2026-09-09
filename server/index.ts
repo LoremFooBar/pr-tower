@@ -6,13 +6,15 @@ import {
   convertToDraft,
   fetchMyOpenPRs,
   fetchNewComments,
+  fetchRecentlyMerged,
   groupComments,
   sendForReview,
   validateToken,
 } from "./github";
 import { fetchAssignedIssues, fetchEpicRollups, validateKey } from "./linear";
 import { envPinned, loadTokens, saveTokens } from "./config";
-import type { CommentAlert, EpicRollup, LinearIssue, PullRequest } from "../src/core/types";
+import type { CommentAlert, Data, EpicRollup, LinearIssue } from "../src/core/types";
+import type { SettledDeploy } from "./github";
 
 const PORT = Number(process.env.PORT ?? 5178);
 const here = dirname(fileURLToPath(import.meta.url));
@@ -49,22 +51,32 @@ const BEAT_MS = 25 * 1000;
 // can come back twice is minutes wide; this is generous for that.
 const SEEN_CAP = 400;
 
-interface Snapshot {
-  prs: PullRequest[];
-  issues: LinearIssue[];
-  rollups: EpicRollup[];
-  at: number;
-  login: string;
-  /** Comments that arrived during the refresh that built this snapshot. */
-  alerts: CommentAlert[];
+/**
+ * What the server remembers between refreshes and never sends anywhere. Keeping
+ * it beside the payload rather than inside it is what makes `/api/data` safe by
+ * construction: the response is one object, so a private field cannot reach the
+ * browser by being forgotten in a list.
+ */
+interface Cursors {
   /**
    * The instant the last comment sweep started, and the cursor for the next one.
    * Absent until a first refresh has run: a board opened for the first time must
    * not announce every comment already on the PRs.
    */
   commentsSince?: string;
-  /** Comment keys already announced. Server-side only; never sent to the page. */
+  /** Comment keys already announced. */
   commentsSeen?: string[];
+  /**
+   * Deploy results that can no longer change, keyed by PR. Only a
+   * green one is kept: a red deploy gets re-run from the GitHub UI, and the
+   * strip has to turn green when someone does that.
+   */
+  deploysSettled?: Record<string, SettledDeploy>;
+}
+
+interface Snapshot {
+  public: Data;
+  cursors: Cursors;
 }
 
 let snapshot: Snapshot | null = readSnapshot();
@@ -80,7 +92,10 @@ function announce(at: number): void {
 
 function readSnapshot(): Snapshot | null {
   try {
-    return JSON.parse(readFileSync(SNAPSHOT, "utf8")) as Snapshot;
+    const saved = JSON.parse(readFileSync(SNAPSHOT, "utf8")) as Snapshot;
+    // A file written before the split has no `public`. It is only a warm start,
+    // so the next refresh rebuilds it rather than the reader guessing a shape.
+    return saved?.public ? saved : null;
   } catch {
     return null;
   }
@@ -131,7 +146,7 @@ function crossOrigin(req: IncomingMessage): boolean {
 
 function refresh(force: boolean): Promise<Snapshot> {
   if (inFlight) return inFlight;
-  if (!force && snapshot && Date.now() - snapshot.at < FRESH_MS) {
+  if (!force && snapshot && Date.now() - snapshot.public.at < FRESH_MS) {
     return Promise.resolve(snapshot);
   }
 
@@ -165,8 +180,8 @@ function refresh(force: boolean): Promise<Snapshot> {
     // Started before the sweep, so a comment posted while it runs is newer than
     // the cursor and is caught by the next one rather than falling in the gap.
     const sweptAt = new Date().toISOString();
-    const since = snapshot?.commentsSince;
-    const seen = new Set(snapshot?.commentsSeen ?? []);
+    const since = snapshot?.cursors.commentsSince;
+    const seen = new Set(snapshot?.cursors.commentsSeen ?? []);
 
     // A comment sweep must not be able to fail the refresh, and on the very
     // first one there is no cursor to sweep from — only a baseline to set.
@@ -177,19 +192,37 @@ function refresh(force: boolean): Promise<Snapshot> {
       ? groupComments([...swept, ...notes], prs, user.login, since, seen)
       : { alerts: [] as CommentAlert[], keys: [] as string[] };
 
+    // Merged PRs must not fail the refresh either, and they are the one source
+    // that reads its own previous answers: a PR that is fully live is never
+    // asked about again.
+    const frozen = snapshot?.cursors.deploysSettled ?? {};
+    const shipped = await fetchRecentlyMerged(
+      tokens.githubToken,
+      user.login,
+      tokens.org,
+      tokens.mergedDays,
+      frozen,
+    ).catch(() => ({ merged: [] as Data["merged"], settled: frozen }));
+
     const next: Snapshot = {
-      prs,
-      issues,
-      rollups,
-      at: Date.now(),
-      login: user.login,
-      alerts,
-      commentsSince: sweptAt,
-      commentsSeen: [...new Set([...seen, ...keys])].slice(-SEEN_CAP),
+      public: {
+        prs,
+        issues,
+        rollups,
+        alerts,
+        merged: shipped.merged,
+        at: Date.now(),
+        login: user.login,
+      },
+      cursors: {
+        commentsSince: sweptAt,
+        commentsSeen: [...new Set([...seen, ...keys])].slice(-SEEN_CAP),
+        deploysSettled: shipped.settled,
+      },
     };
     snapshot = next;
     writeSnapshot(next);
-    announce(next.at);
+    announce(next.public.at);
     return next;
   })().finally(() => {
     inFlight = null;
@@ -208,23 +241,25 @@ const routes: Record<string, (req: IncomingMessage, res: ServerResponse, url: UR
       linearKey: Boolean(tokens.linearKey),
       org: tokens.org,
       pinned,
-      login: snapshot?.login ?? null,
-      at: snapshot?.at ?? null,
+      login: snapshot?.public.login ?? null,
+      at: snapshot?.public.at ?? null,
+      mergedDays: tokens.mergedDays,
     });
   },
 
   async "POST /api/config"(req, res) {
-    const body = (await readJson(req)) as Partial<Record<string, string>>;
+    const body = (await readJson(req)) as Partial<Record<string, string | number>>;
     const current = loadTokens();
     const pinned = envPinned();
+    const typed = (value: unknown) => (typeof value === "string" ? value.trim() : undefined);
     const githubToken = pinned.githubToken
       ? current.githubToken
-      : (body.githubToken?.trim() || current.githubToken);
+      : (typed(body.githubToken) || current.githubToken);
     const linearKey = pinned.linearKey
       ? current.linearKey
       : body.linearKey === ""
         ? ""
-        : (body.linearKey?.trim() || current.linearKey);
+        : (typed(body.linearKey) || current.linearKey);
 
     if (!githubToken) return send(res, 400, { error: "A GitHub token is required." });
 
@@ -235,7 +270,12 @@ const routes: Record<string, (req: IncomingMessage, res: ServerResponse, url: UR
       return send(res, 400, { error: err instanceof Error ? err.message : "Rejected." });
     }
 
-    saveTokens({ githubToken, linearKey, org: (body.org ?? current.org).trim() });
+    saveTokens({
+      githubToken,
+      linearKey,
+      org: typed(body.org) ?? current.org,
+      mergedDays: Number(body.mergedDays ?? current.mergedDays),
+    });
     snapshot = null;
     send(res, 200, { ok: true });
   },
@@ -243,14 +283,7 @@ const routes: Record<string, (req: IncomingMessage, res: ServerResponse, url: UR
   async "GET /api/data"(_req, res, url) {
     try {
       const data = await refresh(url.searchParams.get("force") === "1");
-      send(res, 200, {
-        prs: data.prs,
-        issues: data.issues,
-        rollups: data.rollups,
-        at: data.at,
-        login: data.login,
-        alerts: data.alerts ?? [],
-      });
+      send(res, 200, data.public);
     } catch (err) {
       send(res, 502, { error: err instanceof Error ? err.message : "Refresh failed." });
     }
@@ -296,7 +329,12 @@ async function flipDraft(req: IncomingMessage, res: ServerResponse, toDraft: boo
     if (snapshot) {
       snapshot = {
         ...snapshot,
-        prs: snapshot.prs.map((pr) => (pr.nodeId === body.nodeId ? { ...pr, draft: toDraft } : pr)),
+        public: {
+          ...snapshot.public,
+          prs: snapshot.public.prs.map((pr) =>
+            pr.nodeId === body.nodeId ? { ...pr, draft: toDraft } : pr,
+          ),
+        },
       };
       writeSnapshot(snapshot);
     }

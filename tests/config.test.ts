@@ -28,11 +28,12 @@ describe("token storage", () => {
   it("writes a typed token to the file", async () => {
     const file = tmpFile();
     const { mod, restore } = await withEnv({ GITHUB_TOKEN: undefined, LINEAR_KEY: undefined }, file);
-    mod.saveTokens({ githubToken: "ghp_typed", linearKey: "lin_typed", org: "acme" });
+    mod.saveTokens({ githubToken: "ghp_typed", linearKey: "lin_typed", org: "acme", mergedDays: 7 });
     expect(JSON.parse(readFileSync(file, "utf8"))).toEqual({
       githubToken: "ghp_typed",
       linearKey: "lin_typed",
       org: "acme",
+      mergedDays: 7,
     });
     restore();
   });
@@ -40,7 +41,7 @@ describe("token storage", () => {
   it("never writes a token that came from the environment", async () => {
     const file = tmpFile();
     const { mod, restore } = await withEnv({ GITHUB_TOKEN: "ghp_from_env" }, file);
-    mod.saveTokens({ githubToken: "ghp_from_env", linearKey: "lin_typed", org: "acme" });
+    mod.saveTokens({ githubToken: "ghp_from_env", linearKey: "lin_typed", org: "acme", mergedDays: 7 });
     const written = JSON.parse(readFileSync(file, "utf8"));
     // The secret stays in the variable that supplied it.
     expect(written.githubToken).toBe("");
@@ -54,7 +55,7 @@ describe("token storage", () => {
     const file = tmpFile();
     writeFileSync(file, JSON.stringify({ githubToken: "ghp_old", linearKey: "", org: "acme" }));
     const { mod, restore } = await withEnv({ GITHUB_TOKEN: "ghp_from_env" }, file);
-    mod.saveTokens({ githubToken: "ghp_from_env", linearKey: "", org: "other" });
+    mod.saveTokens({ githubToken: "ghp_from_env", linearKey: "", org: "other", mergedDays: 7 });
     // The file's own value is left alone rather than being overwritten with the
     // environment's copy.
     expect(JSON.parse(readFileSync(file, "utf8")).githubToken).toBe("ghp_old");

@@ -1,12 +1,21 @@
 import { buildModel, stacks } from "../src/core/model";
 import { buildItem, gatesFor, scoreFor, stageOf } from "../src/core/rank";
 import { canonicalPRUrl, linkPR, buildIssueIndex, prTicketKey, stripTicketPrefix } from "../src/core/link";
-import { authorKind, groupComments, latestPerName, resolveChecks } from "../server/github";
+import { authorKind, groupComments, latestPerName, resolveChecks, runState, worstOf } from "../server/github";
 import type { RawComment } from "../server/github";
 import { noticeFor, unseen } from "../src/core/notify";
 import { prLink } from "../src/lib/prhub";
 import { nextStages } from "../src/core/search";
-import type { CommentAlert, LinearIssue, PullRequest, Stage } from "../src/core/types";
+import type {
+  CommentAlert,
+  DeployState,
+  DeployStep,
+  LinearIssue,
+  MergedPR,
+  PullRequest,
+  Stage,
+} from "../src/core/types";
+import { blocker, isLive, mergedLine, mergedView } from "../src/core/merged";
 
 const NOW = new Date("2026-08-26T12:00:00Z").getTime();
 
@@ -1187,5 +1196,168 @@ describe("opening a PR without the PR Hub extension", () => {
       prLink(URL).onClick(event);
       expect(event.preventDefault).not.toHaveBeenCalled();
     }
+  });
+});
+
+describe("merged pull requests", () => {
+  const step = (state: DeployState, name = "deploy"): DeployStep => ({
+    kind: "workflow",
+    name,
+    state,
+  });
+
+  function merged(over: Partial<MergedPR> = {}): MergedPR {
+    return {
+      id: Math.random(),
+      number: 100,
+      title: "[ACME-1] A change",
+      url: "https://github.com/acme/web/pull/100",
+      owner: "acme",
+      repo: "web",
+      mergedAt: "2026-08-26T10:00:00Z",
+      mergeSha: "abc",
+      steps: [step("ok")],
+      state: "ok",
+      ...over,
+    };
+  }
+
+  describe("the worst step decides the row", () => {
+    it("takes the most urgent state present", () => {
+      expect(worstOf([step("ok"), step("failed"), step("running")])).toBe("failed");
+      expect(worstOf([step("ok"), step("running")])).toBe("running");
+      expect(worstOf([step("ok"), step("waiting"), step("running")])).toBe("waiting");
+      expect(worstOf([step("ok"), step("ok")])).toBe("ok");
+    });
+
+    it("says nothing ran rather than guessing", () => {
+      expect(worstOf([])).toBe("none");
+    });
+  });
+
+  describe("reading a workflow run", () => {
+    const run = (over: object) => ({ id: 1, status: "completed", conclusion: null, ...over });
+
+    it("calls an approval gate waiting, because a person has to act", () => {
+      expect(runState(run({ status: "waiting" }))).toBe("waiting");
+    });
+
+    it("calls anything unfinished running", () => {
+      expect(runState(run({ status: "in_progress" }))).toBe("running");
+      expect(runState(run({ status: "queued" }))).toBe("running");
+    });
+
+    it("reads success and the harmless conclusions as done", () => {
+      expect(runState(run({ conclusion: "success" }))).toBe("ok");
+      expect(runState(run({ conclusion: "skipped" }))).toBe("ok");
+    });
+
+    // A cancelled run is almost always one a later merge superseded, so it is
+    // read as done here and resolved against the newer run by the caller.
+    it("does not call a cancelled run a failure", () => {
+      expect(runState(run({ conclusion: "cancelled" }))).toBe("ok");
+    });
+
+    it("calls everything else failed", () => {
+      expect(runState(run({ conclusion: "failure" }))).toBe("failed");
+      expect(runState(run({ conclusion: "timed_out" }))).toBe("failed");
+    });
+  });
+
+  describe("the order", () => {
+    it("puts anything still moving above anything finished", () => {
+      const view = mergedView(
+        [
+          merged({ number: 1, state: "ok", mergedAt: "2026-08-26T12:00:00Z" }),
+          merged({ number: 2, state: "running", mergedAt: "2026-08-26T09:00:00Z" }),
+          merged({ number: 3, state: "failed", mergedAt: "2026-08-26T08:00:00Z" }),
+          merged({ number: 4, state: "waiting", mergedAt: "2026-08-26T07:00:00Z" }),
+        ],
+        "",
+      );
+      expect(view.map((pr) => pr.number)).toEqual([3, 4, 2, 1]);
+    });
+
+    it("orders newest first within a band", () => {
+      const view = mergedView(
+        [
+          merged({ number: 1, state: "ok", mergedAt: "2026-08-20T10:00:00Z" }),
+          merged({ number: 2, state: "ok", mergedAt: "2026-08-26T10:00:00Z" }),
+        ],
+        "",
+      );
+      expect(view.map((pr) => pr.number)).toEqual([2, 1]);
+    });
+
+    it("answers the same text filter the rest of the page does", () => {
+      const rows = [
+        merged({ number: 1, title: "[ACME-1] Cache the pricing table", repo: "web" }),
+        merged({ number: 2, title: "[ACME-2] Bound the retry queue", repo: "worker" }),
+      ];
+      expect(mergedView(rows, "pricing").map((pr) => pr.number)).toEqual([1]);
+      expect(mergedView(rows, "worker").map((pr) => pr.number)).toEqual([2]);
+      expect(mergedView(rows, "#2").map((pr) => pr.number)).toEqual([2]);
+      expect(mergedView(rows, "acme-1").map((pr) => pr.number)).toEqual([1]);
+    });
+  });
+
+  describe("the collapsed line", () => {
+    it("says the window when nothing merged, so a broken fetch is visible", () => {
+      expect(mergedLine([], 7)).toBe("Nothing merged in the last 7 days");
+      expect(mergedLine([], 1)).toBe("Nothing merged in the last 1 day");
+    });
+
+    it("says all live when there is nothing to do", () => {
+      expect(mergedLine([merged(), merged()], 7)).toBe("2 merged · all live");
+    });
+
+    it("leads with the failure and names where it failed", () => {
+      const line = mergedLine(
+        [
+          merged({ number: 5, state: "failed", steps: [step("failed", "production")] }),
+          merged(),
+        ],
+        7,
+      );
+      expect(line).toBe("deploy failed — web #5 production · 1 live");
+    });
+
+    it("names an approval gate as waiting rather than failed", () => {
+      const line = mergedLine(
+        [merged({ number: 6, state: "waiting", steps: [step("waiting", "global")] })],
+        7,
+      );
+      expect(line).toBe("waiting for approval — web #6 global");
+    });
+
+    it("counts the rest that are not live", () => {
+      const line = mergedLine(
+        [
+          merged({ number: 5, state: "failed", steps: [step("failed", "production")] }),
+          merged({ number: 6, state: "running", steps: [step("running", "staging")] }),
+          merged({ number: 7 }),
+        ],
+        7,
+      );
+      expect(line).toBe("deploy failed — web #5 production · 1 more not live · 1 live");
+    });
+  });
+
+  describe("what counts as live", () => {
+    it("treats a PR whose workflows never ran as nothing to chase", () => {
+      expect(isLive(merged({ state: "none", steps: [] }))).toBe(true);
+    });
+
+    it("does not call a waiting PR live", () => {
+      expect(isLive(merged({ state: "waiting" }))).toBe(false);
+    });
+
+    it("names the step the row is stuck on", () => {
+      const pr = merged({
+        state: "failed",
+        steps: [step("ok", "build"), step("failed", "production")],
+      });
+      expect(blocker(pr)?.name).toBe("production");
+    });
   });
 });

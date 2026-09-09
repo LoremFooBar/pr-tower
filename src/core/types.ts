@@ -79,6 +79,46 @@ export interface Reviewer {
   avatar?: string;
 }
 
+// How one part of shipping a merged PR is going. Small on purpose: the row
+// paints a colour per step, and a state that cannot be coloured is not worth
+// carrying. A cancelled run is resolved to "ok" or "running" when it is read,
+// because cancelled almost always means a later merge superseded it.
+export type DeployState = "running" | "waiting" | "ok" | "failed" | "none";
+
+// One thing that has to happen before a merged PR is live: a workflow run, or
+// the environment whose approval it is stuck behind. `kind` is what lets a
+// second source — the Deployments API, or Argo — join the same list later
+// without the row having to guess what it is looking at.
+export interface DeployStep {
+  kind: "workflow" | "environment";
+  name: string;
+  state: DeployState;
+  url?: string;
+  /** Last transition. "Running for 40 seconds" and "running for 40 minutes"
+   *  are different answers to the question the strip exists to ask. */
+  at?: string;
+  /** Set while waiting: the teams or people whose approval is missing. */
+  approvers?: string[];
+  /** True when the reader is one of them, which is the only actionable case. */
+  youCanApprove?: boolean;
+}
+
+export interface MergedPR {
+  id: number;
+  number: number;
+  title: string;
+  url: string;
+  owner: string;
+  repo: string;
+  mergedAt: string;
+  mergeSha: string;
+  /** Ticket key from the title or the branch, for the row's eyebrow. */
+  issueKey?: string;
+  steps: DeployStep[];
+  /** The worst state among the steps: what the row and the strip line report. */
+  state: DeployState;
+}
+
 export type LinearStateType =
   | "backlog"
   | "unstarted"
@@ -212,6 +252,21 @@ export interface NextMove {
   kind: "merge" | "release" | "fix" | "waiting";
   text: string;
   item?: Item;
+}
+
+/**
+ * Exactly what `/api/data` sends. The server holds this inside its snapshot and
+ * returns it whole, so a field cannot reach the browser by being forgotten in a
+ * response literal — anything private lives in the server's cursors instead.
+ */
+export interface Data {
+  prs: PullRequest[];
+  issues: LinearIssue[];
+  rollups: EpicRollup[];
+  alerts: CommentAlert[];
+  merged: MergedPR[];
+  at: number;
+  login: string;
 }
 
 export interface Group {

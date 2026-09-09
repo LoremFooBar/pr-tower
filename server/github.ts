@@ -3,10 +3,14 @@ import type {
   CheckStatus,
   CommentAlert,
   CommentKind,
+  DeployState,
+  DeployStep,
   GitHubUser,
+  MergedPR,
   PullRequest,
   Reviewer,
 } from "../src/core/types";
+import { parseTicketKey } from "../src/core/link";
 
 // Overridable so the end-to-end test can point the real server at a local
 // stand-in for GitHub instead of reaching the internet.
@@ -577,4 +581,230 @@ export function sendForReview(token: string, nodeId: string): Promise<void> {
 
 export function convertToDraft(token: string, nodeId: string): Promise<void> {
   return draftMutation(token, nodeId, "convertPullRequestToDraft", true);
+}
+
+// A merged PR costs a detail call and a runs call, and only while it is still
+// moving. Lower than the open-PR pool because most refreshes read a handful.
+const MERGED_CONCURRENCY = 4;
+
+interface MergedItem {
+  id: number;
+  number: number;
+  title: string;
+  html_url: string;
+  repository_url: string;
+  closed_at: string;
+}
+
+interface RunRow {
+  id: number;
+  name?: string;
+  status: string;
+  conclusion: string | null;
+  html_url?: string;
+  head_branch?: string | null;
+  head_sha?: string;
+  workflow_id?: number;
+  run_started_at?: string;
+  updated_at?: string;
+}
+
+interface PendingDeployment {
+  environment?: { name?: string };
+  current_user_can_approve?: boolean;
+  reviewers?: { reviewer?: { login?: string; name?: string; slug?: string } }[];
+}
+
+// Worst first, so a single red step colours the whole PR.
+const BY_URGENCY: DeployState[] = ["failed", "waiting", "running", "none", "ok"];
+
+export function worstOf(steps: DeployStep[]): DeployState {
+  if (steps.length === 0) return "none";
+  return BY_URGENCY.find((state) => steps.some((step) => step.state === state)) ?? "ok";
+}
+
+/**
+ * `waiting` is a run held at an environment protection rule, which is the one
+ * deploy state a person can act on. A cancelled run reads as ok here and is
+ * resolved properly by the caller.
+ */
+export function runState(run: RunRow): DeployState {
+  if (run.status === "waiting" || run.status === "pending") return "waiting";
+  if (run.status !== "completed") return "running";
+  switch (run.conclusion) {
+    case "success":
+    case "skipped":
+    case "neutral":
+    case "cancelled":
+      return "ok";
+    default:
+      return "failed";
+  }
+}
+
+/**
+ * A deploy run is cancelled when a later merge supersedes it, so the commit is
+ * usually live through the newer run rather than not live at all. The newest
+ * successful run of the same workflow settles it: if that run contains this
+ * commit the work shipped, and if it does not, the run carrying it is still on
+ * its way.
+ */
+async function supersededState(
+  token: string,
+  owner: string,
+  repo: string,
+  sha: string,
+  workflowId: number | undefined,
+  branch: string,
+): Promise<DeployState> {
+  if (!workflowId) return "ok";
+  const latest = await rest<{ workflow_runs: RunRow[] }>(
+    token,
+    `/repos/${owner}/${repo}/actions/workflows/${workflowId}/runs?branch=${encodeURIComponent(branch)}&status=success&per_page=1`,
+  ).catch(() => ({ workflow_runs: [] as RunRow[] }));
+
+  const head = latest.workflow_runs[0]?.head_sha;
+  if (!head) return "running";
+  if (head === sha) return "ok";
+
+  const compared = await rest<{ status?: string }>(
+    token,
+    `/repos/${owner}/${repo}/compare/${sha}...${head}`,
+  ).catch(() => null);
+  return compared?.status === "ahead" || compared?.status === "identical" ? "ok" : "running";
+}
+
+async function stepsFor(
+  token: string,
+  owner: string,
+  repo: string,
+  sha: string,
+  branch: string,
+): Promise<DeployStep[]> {
+  const runs = await rest<{ workflow_runs: RunRow[] }>(
+    token,
+    `/repos/${owner}/${repo}/actions/runs?head_sha=${sha}&per_page=50`,
+  ).catch(() => ({ workflow_runs: [] as RunRow[] }));
+
+  // Only what ran on the branch the PR merged into. The same commit can carry
+  // runs from the pull_request event, which say nothing about shipping.
+  const onBranch = runs.workflow_runs.filter((run) => (run.head_branch ?? branch) === branch);
+
+  return pooled(onBranch, 3, async (run) => {
+    const step: DeployStep = {
+      kind: "workflow",
+      name: run.name ?? "workflow",
+      state: runState(run),
+      url: run.html_url,
+      at: run.updated_at ?? run.run_started_at,
+    };
+
+    if (step.state === "waiting") {
+      const pending = await rest<PendingDeployment[]>(
+        token,
+        `/repos/${owner}/${repo}/actions/runs/${run.id}/pending_deployments`,
+      ).catch(() => [] as PendingDeployment[]);
+      const gate = pending[0];
+      if (gate?.environment?.name) {
+        step.kind = "environment";
+        step.name = gate.environment.name;
+      }
+      const who = (gate?.reviewers ?? [])
+        .map((row) => row.reviewer?.login ?? row.reviewer?.name ?? row.reviewer?.slug ?? "")
+        .filter(Boolean);
+      if (who.length > 0) step.approvers = who;
+      step.youCanApprove = Boolean(gate?.current_user_can_approve);
+    }
+
+    if (run.conclusion === "cancelled") {
+      step.state = await supersededState(token, owner, repo, sha, run.workflow_id, branch);
+    }
+
+    return step;
+  });
+}
+
+/**
+ * Merged PRs and how far each one has shipped.
+ *
+ * `frozen` carries results from the last refresh that can no longer change, so
+ * a week-old PR that is fully live costs nothing but its place in the search.
+ * Only a green result is frozen: a red one gets re-run from the GitHub UI, and
+ * the whole point of the strip is that it turns green when someone does that.
+ */
+export interface SettledDeploy {
+  sha: string;
+  mergedAt: string;
+  steps: DeployStep[];
+}
+
+export async function fetchRecentlyMerged(
+  token: string,
+  login: string,
+  org: string,
+  days: number,
+  frozen: Record<string, SettledDeploy>,
+): Promise<{ merged: MergedPR[]; settled: Record<string, SettledDeploy> }> {
+  const since = new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
+  const query = `type:pr author:${login} is:merged merged:>=${since}${org ? ` org:${org}` : ""}`;
+  const search = await rest<{ items: MergedItem[] }>(
+    token,
+    `/search/issues?q=${encodeURIComponent(query)}&per_page=100`,
+  );
+
+  const settled: Record<string, SettledDeploy> = {};
+
+  const merged = await pooled(search.items, MERGED_CONCURRENCY, async (item) => {
+    const [owner, repo] = item.repository_url.split("/repos/")[1].split("/");
+    const base: MergedPR = {
+      id: item.id,
+      number: item.number,
+      title: item.title,
+      url: item.html_url,
+      owner,
+      repo,
+      mergedAt: item.closed_at,
+      mergeSha: "",
+      issueKey: parseTicketKey(item.title) ?? undefined,
+      steps: [],
+      state: "none",
+    };
+
+    // Keyed by the PR, not by the commit, so a PR that is already live costs
+    // nothing at all — reading its merge commit would itself be a call.
+    const key = `${owner}/${repo}#${item.number}`;
+    const known = frozen[key];
+    if (known) {
+      base.mergeSha = known.sha;
+      base.mergedAt = known.mergedAt;
+      base.steps = known.steps;
+      base.state = worstOf(known.steps);
+      settled[key] = known;
+      return base;
+    }
+
+    try {
+      const detail = await rest<{
+        merge_commit_sha?: string;
+        merged_at?: string;
+        base?: { ref?: string };
+      }>(token, `/repos/${owner}/${repo}/pulls/${item.number}`);
+
+      base.mergeSha = detail.merge_commit_sha ?? "";
+      base.mergedAt = detail.merged_at ?? item.closed_at;
+      if (!base.mergeSha) return base;
+
+      base.steps = await stepsFor(token, owner, repo, base.mergeSha, detail.base?.ref ?? "main");
+      base.state = worstOf(base.steps);
+      if (base.state === "ok" && base.steps.length > 0) {
+        settled[key] = { sha: base.mergeSha, mergedAt: base.mergedAt, steps: base.steps };
+      }
+    } catch {
+      // One PR failing to read its runs must not lose the whole strip.
+    }
+
+    return base;
+  });
+
+  return { merged, settled };
 }

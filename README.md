@@ -49,6 +49,29 @@ its epic named inline. Tooling PRs with no ticket sit muted at the bottom.
 Rows sort the same way everywhere: cleared, then what needs you, then what is
 waiting on other people, then what is blocked by another ticket.
 
+## Did it actually ship
+
+Under the queue, a one-line strip of your recently merged PRs:
+
+```
+▸ Merged  deploy failed — management #1940 Main CI/CD Pipeline · 4 more not live · 15 live
+▸ Merged  21 merged · all live
+▸ Merged  Nothing merged in the last 7 days
+```
+
+The line always leads with whatever is stuck, so you can read it without opening
+it. Expanded, one row per PR with a pill per workflow or environment: green done,
+blue running, amber waiting for approval, red failed. A row held at an approval
+gate names the environment and who has to approve it.
+
+"Shipped" means CI ran on `main` for the merge commit. A deploy that was
+cancelled because a later merge overtook it counts as shipped once that later run
+contains your commit.
+
+Anything still moving sorts to the top. The window is set on the Keys screen and
+trims finished rows only — a deploy that failed last week stays until you deal
+with it.
+
 ## Finding things
 
 A strip of **stage chips** sits above the queue, each with a count:

@@ -103,9 +103,10 @@ src/core/     pure logic, all unit tested, runs in the browser
   rank.ts     gates, signals, and the importance score
   model.ts    buildModel: PRs to tickets to parent epics, plus the send queue
   api.ts      the client's only outside contact — this app's own backend
+  merged.ts   merged PRs: the deploy order, and the collapsed line
   notify.ts   comment arrivals to desktop notification wording
   store.ts    a date helper; the browser stores nothing
-src/ui/       Preact components
+src/ui/       Preact components (board, parts, merged, setup)
 tools/        font embedding, the mock upstream, the verification harness
 ```
 
@@ -123,6 +124,13 @@ Three things about it:
 - **The event carries a timestamp, not data.** The fetch that holds a token
   still happens only inside the container, and the stream stays cheap enough to
   ignore.
+- **The snapshot is `{ public, cursors }`, and `/api/data` returns `public`
+  whole.** Nothing private can reach the browser by being forgotten in a
+  response literal, because there is no literal: cursors, comment keys and
+  frozen deploy results live in the other half and never leave the process.
+  `src/core/types.ts` owns the `Data` shape so the server and the client cannot
+  describe it differently. `npm run verify` asserts the private names are absent
+  from the payload.
 - **The background pull raises no spinner.** The Sync button's spinner answers
   for a press; a board that stirs on a timer nobody touched reads as a fault.
 - **Write the SSE headers with a first chunk.** Node holds headers back until
@@ -178,6 +186,52 @@ gets its permission withdrawn.
 - **The mute lasts for the session.** The browser's permission is the switch that
   survives a reload; the bell is an in-page toggle, because the browser stores
   nothing.
+
+## Recently merged
+
+A strip under the cleared queue answers one question: did what I merged actually
+ship. It is the other end of the pipeline the queue starts, which is why the two
+sit together as a matched pair of one-line collapsibles.
+
+- **"Deployed" means CI ran on `main` for the merge commit.** Not Argo, not the
+  Linear state. `fetchRecentlyMerged` reads the workflow runs for the PR's
+  `merge_commit_sha` on the branch it merged into, and each run becomes a
+  `DeployStep`. Argo is deliberately not consulted: GitHub already knows, and a
+  second source would need credentials the container does not have.
+- **A cancelled run means superseded, not broken.** Two of ten recent merges had
+  their deploy cancelled because a later merge landed and the concurrency group
+  killed it. Read literally that says "never deployed" forever, which on a busy
+  repository is the common case. `supersededState` asks whether the newest
+  successful run of the same workflow contains the commit; if it does the work
+  shipped, and if it does not the run carrying it is still on its way.
+- **Only a green result is frozen.** A red deploy gets re-run from the GitHub UI,
+  and the whole point of the strip is that it turns green when someone does
+  that. Freezing failures would make the most useful signal the one that never
+  updates.
+- **The freeze is keyed by PR, not by commit**, so a PR that is already live
+  costs *nothing* — reading its merge commit would itself be a call. A warm
+  refresh of 21 merged PRs asks GitHub about the 6 that are still moving.
+- **The environment is only knowable while waiting.** `pending_deployments`
+  reports the environment, the reviewers and whether the reader can approve —
+  which is the single most actionable thing here. A run that already failed
+  reports only its workflow name, so the row says that instead of inventing one.
+- **Merged PRs never enter `buildModel`.** `openTickets`, blocker spending and
+  stack detection all encode "still open"; a merged PR flowing through would
+  spend blockers that are already spent and re-anchor stacks that have
+  collapsed. `mergedView` in `src/core/merged.ts` is a sibling, not a field of
+  the model.
+- **The collapsed line leads with whatever is stuck**, so the strip does a
+  checklist's job without a checklist's failure mode: a section that empties
+  itself cannot be told apart from a fetch that broke. It always says something,
+  down to `Nothing merged in the last 7 days`.
+- **Anything still moving sorts above anything finished**, and live rows are
+  muted. The window trims *finished* rows only — a deploy that failed three days
+  ago must not age out in silence, which is the exact miss this exists to catch.
+- **The filter reaches merged PRs.** `matchesQuery` takes a `Searchable` rather
+  than an `Item` for this reason; a query that matches only a merged PR must not
+  report "Nothing matches". That is the one place the strip touches the rest of
+  the page.
+- **The window is configurable** on the Keys screen, clamped to 1–90 days.
 
 ## Opening a PR in Chrome
 

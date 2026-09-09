@@ -5,13 +5,25 @@ export interface Tokens {
   githubToken: string;
   linearKey: string;
   org: string;
+  /** How far back the merged strip looks. A setting, not a secret. */
+  mergedDays: number;
 }
+
+// A window nobody would type on purpose still has to produce a search GitHub
+// will accept, so it is clamped rather than trusted.
+const MERGED_DAYS_MAX = 90;
 
 // Tokens live only here, in the container. They are never sent to the browser:
 // every response that mentions them says whether one is set, not what it is.
 const FILE = process.env.PRTOWER_CONFIG ?? "/data/config.json";
 
-const EMPTY: Tokens = { githubToken: "", linearKey: "", org: "" };
+const EMPTY: Tokens = { githubToken: "", linearKey: "", org: "", mergedDays: 7 };
+
+function windowDays(value: unknown): number {
+  const days = Math.round(Number(value));
+  if (!Number.isFinite(days) || days < 1) return EMPTY.mergedDays;
+  return Math.min(days, MERGED_DAYS_MAX);
+}
 
 let cached: Tokens | null = null;
 
@@ -34,7 +46,10 @@ function fromFile(): Partial<Tokens> {
 // The environment wins, so a compose file or a secrets manager can pin the
 // tokens and the settings screen cannot quietly override them.
 export function loadTokens(): Tokens {
-  if (!cached) cached = { ...EMPTY, ...fromFile(), ...fromEnv() };
+  if (!cached) {
+    const merged = { ...EMPTY, ...fromFile(), ...fromEnv() };
+    cached = { ...merged, mergedDays: windowDays(merged.mergedDays) };
+  }
   return cached;
 }
 
@@ -60,6 +75,7 @@ export function saveTokens(next: Tokens): Tokens {
     githubToken: pinned.githubToken ? (onDisk.githubToken ?? "") : next.githubToken,
     linearKey: pinned.linearKey ? (onDisk.linearKey ?? "") : next.linearKey,
     org: next.org,
+    mergedDays: windowDays(next.mergedDays),
   };
   mkdirSync(dirname(FILE), { recursive: true });
   writeFileSync(FILE, JSON.stringify(merged, null, 2));

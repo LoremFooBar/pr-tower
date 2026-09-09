@@ -55,7 +55,28 @@ createServer(async (req, res) => {
   }
 
   if (path === "/user") return json(res, fixture.user);
-  if (path === "/search/issues") return json(res, { items: fixture.items });
+  if (path === "/search/issues") {
+    // One endpoint answers two questions; the merged strip asks a different one.
+    const merged = (url.searchParams.get("q") ?? "").includes("is:merged");
+    return json(res, { items: merged ? (fixture.merged ?? []) : fixture.items });
+  }
+
+  let m2 = path.match(/^\/repos\/[^/]+\/[^/]+\/actions\/runs\/(\d+)\/pending_deployments$/);
+  if (m2) return json(res, fixture.pending?.[m2[1]] ?? []);
+
+  m2 = path.match(/^\/repos\/[^/]+\/[^/]+\/actions\/runs$/);
+  if (m2) {
+    const sha = url.searchParams.get("head_sha") ?? "";
+    return json(res, { workflow_runs: fixture.runs?.[sha] ?? [] });
+  }
+
+  m2 = path.match(/^\/repos\/[^/]+\/[^/]+\/actions\/workflows\/(\d+)\/runs$/);
+  if (m2) return json(res, { workflow_runs: fixture.workflowRuns?.[m2[1]] ?? [] });
+
+  // A cancelled deploy is resolved by asking whether a newer successful run
+  // already contains the commit.
+  m2 = path.match(/^\/repos\/[^/]+\/[^/]+\/compare\/(.+)$/);
+  if (m2) return json(res, fixture.compare?.[decodeURIComponent(m2[1])] ?? { status: "diverged" });
 
   let m = path.match(/^\/repos\/([^/]+)\/([^/]+)\/pulls\/(\d+)$/);
   if (m) return json(res, fixture.details[`${m[1]}/${m[2]}/${m[3]}`] ?? {});

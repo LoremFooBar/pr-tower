@@ -1,4 +1,6 @@
-import type { CommentAlert, EpicRollup, LinearIssue, PullRequest } from "./types";
+import type { Data } from "./types";
+
+export type { Data };
 
 // The browser never holds a token. Every call goes to this app's own backend,
 // which attaches the credentials it keeps inside the container.
@@ -10,16 +12,8 @@ export interface Status {
   pinned: { githubToken: boolean; linearKey: boolean };
   login: string | null;
   at: number | null;
-}
-
-export interface Data {
-  prs: PullRequest[];
-  issues: LinearIssue[];
-  rollups: EpicRollup[];
-  at: number;
-  login: string;
-  /** Comments that arrived during the refresh that built this snapshot. */
-  alerts: CommentAlert[];
+  /** How far back the merged strip looks. */
+  mergedDays: number;
 }
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
@@ -60,6 +54,7 @@ export interface ConfigInput {
   githubToken?: string;
   linearKey?: string;
   org: string;
+  mergedDays?: number;
 }
 
 export function saveConfig(input: ConfigInput): Promise<{ ok: true }> {

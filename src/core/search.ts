@@ -1,17 +1,38 @@
 import { stageOf } from "./rank";
-import type { Item, Stage } from "./types";
+import type { Item, MergedPR, Stage } from "./types";
 
-// What a PR is findable by. The branch is left out on purpose: it repeats the
-// ticket key most of the time and would otherwise match a token the row never
-// shows, which reads as a wrong result.
-function haystack(item: Item): string {
-  return [
-    item.pr.title,
-    item.pr.repo,
-    `#${item.pr.number}`,
-    item.issue?.id ?? "",
-    item.epicId ?? "",
-  ]
+/**
+ * The fields a row is findable by, whatever kind of row it is. Open PRs and
+ * merged PRs answer to one filter grammar because they sit on one page; keeping
+ * the grammar in one place is what makes the next kind of row cheap.
+ */
+export interface Searchable {
+  title: string;
+  repo: string;
+  number: number;
+  ticket?: string;
+  epic?: string;
+}
+
+// The branch is left out on purpose: it repeats the ticket key most of the time
+// and would otherwise match a token the row never shows, which reads as a wrong
+// result.
+export function searchableItem(item: Item): Searchable {
+  return {
+    title: item.pr.title,
+    repo: item.pr.repo,
+    number: item.pr.number,
+    ticket: item.issue?.id,
+    epic: item.epicId,
+  };
+}
+
+export function searchableMerged(pr: MergedPR): Searchable {
+  return { title: pr.title, repo: pr.repo, number: pr.number, ticket: pr.issueKey };
+}
+
+function haystack(row: Searchable): string {
+  return [row.title, row.repo, `#${row.number}`, row.ticket ?? "", row.epic ?? ""]
     .join(" ")
     .toLowerCase();
 }
@@ -21,10 +42,10 @@ function haystack(item: Item): string {
  * rather than widening it. A leading # is dropped from the token: a PR gets
  * written both "#6845" and "6845".
  */
-export function matchesQuery(item: Item, query: string): boolean {
+export function matchesQuery(row: Searchable, query: string): boolean {
   const tokens = query.toLowerCase().split(/\s+/).filter(Boolean);
   if (tokens.length === 0) return true;
-  const text = haystack(item);
+  const text = haystack(row);
   return tokens.every((token) => text.includes(token.replace(/^#/, "")));
 }
 

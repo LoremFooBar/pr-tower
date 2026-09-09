@@ -6,7 +6,12 @@ import { KeyRound, Loader2, TowerControl } from "lucide-react";
 
 interface SetupProps {
   status: Status;
-  onSave(input: { githubToken?: string; linearKey?: string; org: string }): Promise<void>;
+  onSave(input: {
+    githubToken?: string;
+    linearKey?: string;
+    org: string;
+    mergedDays: number;
+  }): Promise<void>;
   error?: string;
   busy?: boolean;
   onCancel?(): void;
@@ -41,6 +46,7 @@ export function Setup({ status, onSave, error, busy, onCancel }: SetupProps) {
   const [githubToken, setGithubToken] = useState("");
   const [linearKey, setLinearKey] = useState("");
   const [org, setOrg] = useState(status.org);
+  const [mergedDays, setMergedDays] = useState(String(status.mergedDays));
 
   const first = !status.githubToken;
 
@@ -122,6 +128,18 @@ export function Setup({ status, onSave, error, busy, onCancel }: SetupProps) {
             onChange={(event) => setOrg(event.target.value)}
           />
 
+          <Field
+            id="days"
+            label="Merged window"
+            hint="How many days of merged PRs the strip keeps. Anything not yet live stays past it."
+            type="number"
+            min={1}
+            max={90}
+            placeholder="7"
+            value={mergedDays}
+            onChange={(event) => setMergedDays(event.target.value)}
+          />
+
           <div className="flex justify-end gap-2 pt-1">
             {onCancel ? (
               <Button variant="outline" onClick={onCancel} disabled={busy}>
@@ -135,6 +153,7 @@ export function Setup({ status, onSave, error, busy, onCancel }: SetupProps) {
                   ...(githubToken.trim() ? { githubToken: githubToken.trim() } : {}),
                   ...(linearKey.trim() ? { linearKey: linearKey.trim() } : {}),
                   org: org.trim(),
+                  mergedDays: Number(mergedDays) || status.mergedDays,
                 })
               }
               disabled={busy || (first && !githubToken.trim())}

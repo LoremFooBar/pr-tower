@@ -338,7 +338,63 @@ for (const theme of ["dark", "light"]) {
     if (typed >= before) problems.push("typing after Cmd+F narrowed nothing");
     if (emptied !== before) problems.push(`closing the filter left ${emptied} rows, not ${before}`);
 
+    // The merged strip. Four merged PRs in the fixture: one green, one whose
+    // deploy failed, one held at an approval gate, and one whose run was
+    // cancelled by a later merge that already contains it.
+    const strip = page.locator("#app [data-merged]");
+    const line = (await strip.locator("button").first().textContent()) ?? "";
+    console.log(`merged line             : ${line.replace(/^Merged/, "").trim()}`);
+    if (!/deploy failed/.test(line)) problems.push("the merged line did not lead with the failure");
+    if (!/worker #300/.test(line)) problems.push("the merged line did not name the failed PR");
+    // A failed run names its workflow; only a run held at a gate knows its
+    // environment, because that is the one case GitHub reports one for.
+    if (!/worker #300 Deployment Pipeline/.test(line)) {
+      problems.push("the merged line did not name the step that failed");
+    }
+    if (!/1 more not live/.test(line)) problems.push("the merged line did not count the rest");
+
+    await strip.locator("button").first().click();
+    await page.waitForTimeout(300);
+    const mergedRows = page.locator("#app [data-merged-pr]");
+    const count = await mergedRows.count();
+    console.log(`merged rows             : ${count} (want 4)`);
+    if (count !== 4) problems.push(`the strip listed ${count} merged PRs, not 4`);
+
+    // Anything still moving sorts above anything finished.
+    const order = [];
+    for (let i = 0; i < count; i++) order.push((await mergedRows.nth(i).textContent()) ?? "");
+    console.log(`  first : ${order[0]?.replace(/\s+/g, " ").slice(0, 60)}`);
+    console.log(`  second: ${order[1]?.replace(/\s+/g, " ").slice(0, 60)}`);
+    if (!/#300/.test(order[0] ?? "")) problems.push("the failed deploy was not the first row");
+    if (!/#500/.test(order[1] ?? "")) problems.push("the approval gate was not the second row");
+
+    // The gate names the environment it is held at, which is the actionable bit.
+    const gate = await page.locator("#app [data-merged-pr]", { hasText: "#500" }).textContent();
+    if (!/production/.test(gate ?? "")) problems.push("the waiting row did not name its environment");
+
+    // A cancelled run whose commit is already in a newer successful run is live.
+    const superseded = await page.locator("#app [data-merged-pr]", { hasText: "#900" }).textContent();
+    console.log(`superseded run reads as : ${/#900/.test(superseded ?? "") ? "a row" : "MISSING"}`);
+    if (!/#900/.test(superseded ?? "")) problems.push("the superseded PR never reached the strip");
+
+    // The filter reaches merged PRs too, or a search for one says "nothing".
+    const mergeFilter = page.getByLabel("Filter pull requests");
+    await mergeFilter.fill("cookie");
+    await page.waitForTimeout(300);
+    const found = (await page.textContent("#app")) ?? "";
+    console.log(`filter reaches merged   : ${/Rotate the session cookie/.test(found) ? "yes" : "NO"}`);
+    if (/Nothing matches/.test(found)) problems.push("a query matching only a merged PR said nothing matches");
+    if (!/Rotate the session cookie/.test(found)) problems.push("the merged PR was not found by the filter");
+    await mergeFilter.press("Escape");
+    await page.waitForTimeout(250);
+
     const server = await (await fetch(`http://localhost:${APP}/api/data`)).json();
+    console.log(`merged in the payload   : ${(server.merged ?? []).length}`);
+    if ((server.merged ?? []).length !== 4) problems.push("/api/data did not carry the merged PRs");
+    // The snapshot split exists so a server-only field cannot reach the browser.
+    for (const secret of ["commentsSeen", "commentsSince", "deploysSettled", "cursors"]) {
+      if (secret in server) problems.push(`/api/data leaked the server-only field ${secret}`);
+    }
     console.log(`server drafts remaining: ${server.prs.filter((pr) => pr.draft).length}`);
 
     const status = await (await fetch(`http://localhost:${APP}/api/status`)).text();

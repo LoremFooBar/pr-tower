@@ -13,7 +13,7 @@ import type {
 } from "./types";
 import { buildIssueIndex, linkPR, prTicketKey } from "./link";
 import { buildItem, stageOf } from "./rank";
-import { matchesQuery, matchesStages } from "./search";
+import { matchesQuery, matchesStages, searchableItem } from "./search";
 
 const NO_PARENT = " no-parent";
 const NO_TICKET = " no-ticket";
@@ -280,7 +280,9 @@ export function buildModel(
   // stacks were all worked out above against every open PR, so a PR hidden by a
   // query still spends the blocker it owns and still anchors its stack.
   const total = items.length;
-  const matched = query ? items.filter((item) => matchesQuery(item, query)) : items;
+  const matched = query
+    ? items.filter((item) => matchesQuery(searchableItem(item), query))
+    : items;
   const visible = stages.length
     ? matched.filter((item) => matchesStages(item, stages))
     : matched;

@@ -221,6 +221,34 @@
    "additions": 120,
    "deletions": 40,
    "changed_files": 6
+  },
+  "acme/web/700": {
+   "merge_commit_sha": "aaa1111",
+   "merged_at": "2026-08-26T09:00:00Z",
+   "base": {
+    "ref": "main"
+   }
+  },
+  "acme/worker/300": {
+   "merge_commit_sha": "bbb2222",
+   "merged_at": "2026-08-26T08:00:00Z",
+   "base": {
+    "ref": "main"
+   }
+  },
+  "acme/infra/500": {
+   "merge_commit_sha": "ccc3333",
+   "merged_at": "2026-08-26T07:00:00Z",
+   "base": {
+    "ref": "main"
+   }
+  },
+  "acme/content/900": {
+   "merge_commit_sha": "ddd4444",
+   "merged_at": "2026-08-26T06:00:00Z",
+   "base": {
+    "ref": "main"
+   }
   }
  },
  "reviews": {
@@ -791,6 +819,164 @@
      "body": "The rollup window should be inclusive at both ends."
     }
    ]
+  }
+ },
+ "merged": [
+  {
+   "id": 9001,
+   "number": 700,
+   "title": "[ACME-1150] Rotate the session cookie name",
+   "html_url": "https://github.com/acme/web/pull/700",
+   "repository_url": "https://api.github.com/repos/acme/web",
+   "closed_at": "2026-08-26T09:00:00Z"
+  },
+  {
+   "id": 9002,
+   "number": 300,
+   "title": "[ACME-1311] Drain the retry queue on shutdown",
+   "html_url": "https://github.com/acme/worker/pull/300",
+   "repository_url": "https://api.github.com/repos/acme/worker",
+   "closed_at": "2026-08-26T08:00:00Z"
+  },
+  {
+   "id": 9003,
+   "number": 500,
+   "title": "[ACME-980] Add the pricing cache bucket",
+   "html_url": "https://github.com/acme/infra/pull/500",
+   "repository_url": "https://api.github.com/repos/acme/infra",
+   "closed_at": "2026-08-26T07:00:00Z"
+  },
+  {
+   "id": 9004,
+   "number": 900,
+   "title": "[ACME-1201] Read usage from the rollup endpoint",
+   "html_url": "https://github.com/acme/content/pull/900",
+   "repository_url": "https://api.github.com/repos/acme/content",
+   "closed_at": "2026-08-26T06:00:00Z"
+  }
+ ],
+ "runs": {
+  "aaa1111": [
+   {
+    "id": 11,
+    "name": "Unit tests",
+    "status": "completed",
+    "conclusion": "success",
+    "head_branch": "main",
+    "workflow_id": 11,
+    "html_url": "https://github.com/acme/x/actions/runs/11",
+    "updated_at": "2026-08-26T09:30:00Z"
+   },
+   {
+    "id": 12,
+    "name": "Deployment Pipeline",
+    "status": "completed",
+    "conclusion": "success",
+    "head_branch": "main",
+    "workflow_id": 12,
+    "html_url": "https://github.com/acme/x/actions/runs/12",
+    "updated_at": "2026-08-26T09:30:00Z"
+   }
+  ],
+  "bbb2222": [
+   {
+    "id": 21,
+    "name": "Unit tests",
+    "status": "completed",
+    "conclusion": "success",
+    "head_branch": "main",
+    "workflow_id": 21,
+    "html_url": "https://github.com/acme/x/actions/runs/21",
+    "updated_at": "2026-08-26T09:30:00Z"
+   },
+   {
+    "id": 22,
+    "name": "Deployment Pipeline",
+    "status": "completed",
+    "conclusion": "failure",
+    "head_branch": "main",
+    "workflow_id": 22,
+    "html_url": "https://github.com/acme/x/actions/runs/22",
+    "updated_at": "2026-08-26T09:30:00Z"
+   }
+  ],
+  "ccc3333": [
+   {
+    "id": 31,
+    "name": "Unit tests",
+    "status": "completed",
+    "conclusion": "success",
+    "head_branch": "main",
+    "workflow_id": 31,
+    "html_url": "https://github.com/acme/x/actions/runs/31",
+    "updated_at": "2026-08-26T09:30:00Z"
+   },
+   {
+    "id": 32,
+    "name": "Terraform Apply",
+    "status": "waiting",
+    "conclusion": null,
+    "head_branch": "main",
+    "workflow_id": 32,
+    "html_url": "https://github.com/acme/x/actions/runs/32",
+    "updated_at": "2026-08-26T09:30:00Z"
+   }
+  ],
+  "ddd4444": [
+   {
+    "id": 41,
+    "name": "Unit tests",
+    "status": "completed",
+    "conclusion": "success",
+    "head_branch": "main",
+    "workflow_id": 41,
+    "html_url": "https://github.com/acme/x/actions/runs/41",
+    "updated_at": "2026-08-26T09:30:00Z"
+   },
+   {
+    "id": 42,
+    "name": "Deployment Pipeline",
+    "status": "completed",
+    "conclusion": "cancelled",
+    "head_branch": "main",
+    "workflow_id": 777,
+    "html_url": "https://github.com/acme/x/actions/runs/42",
+    "updated_at": "2026-08-26T09:30:00Z"
+   }
+  ]
+ },
+ "pending": {
+  "32": [
+   {
+    "environment": {
+     "name": "production"
+    },
+    "current_user_can_approve": true,
+    "reviewers": [
+     {
+      "reviewer": {
+       "login": "platform"
+      }
+     }
+    ]
+   }
+  ]
+ },
+ "workflowRuns": {
+  "777": [
+   {
+    "id": 43,
+    "head_sha": "eee5555",
+    "status": "completed",
+    "conclusion": "success"
+   }
+  ]
+ },
+ "compare": {
+  "ddd4444...eee5555": {
+   "status": "ahead",
+   "ahead_by": 3,
+   "behind_by": 0
   }
  }
 }
