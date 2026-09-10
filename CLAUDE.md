@@ -231,10 +231,16 @@ sit together as a matched pair of one-line collapsibles.
   than an `Item` for this reason; a query that matches only a merged PR must not
   report "Nothing matches". That is the one place the strip touches the rest of
   the page.
-- **A merged PR also appears under its ticket**, in the bay or the ledger,
-  struck through and carrying only the gates it is still stuck at. That is what
-  makes a bay show the whole effort rather than the part still open. It is
-  attached by `mergedByTicket`, which only matches tickets already on the board:
+- **A merged PR also appears in its bay or ledger, in one block at the end.**
+  Muted, under a `merged` heading, carrying its ticket key and only the gates it
+  is still stuck at. That is what makes a bay show the whole effort rather than
+  the part still open, without an open PR ever sitting below a finished one.
+  Interleaving them under each ticket was tried and rejected: it put finished
+  work in the middle of the list you are meant to act on, and a strike-through
+  reads as cancelled rather than shipped. The key on the row is what keeps a PR
+  attributable now that it no longer sits beneath its own ticket.
+  It is attached by `mergedByTicket`, which only matches tickets already on the
+  board:
   a ticket whose PRs have all merged is finished, and a section for it would be
   a section about nothing. The strip keeps its own copy — the queue already
   duplicates rows the bays show, for the same reason.

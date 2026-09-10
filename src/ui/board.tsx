@@ -12,7 +12,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { cn } from "@/lib/utils";
 import { prLink } from "@/lib/prhub";
 import { priorityLabel, Row, Tie } from "./parts";
-import { MergedRow } from "./merged";
+import { MergedUnderTickets } from "./merged";
 import { ChevronRight, Send, Sparkles } from "lucide-react";
 
 export interface Handlers {
@@ -283,6 +283,16 @@ export function Queue({ model, handlers }: { model: Model; handlers: Handlers })
   );
 }
 
+// Every merged PR belonging to the tickets on show, newest first. They sit
+// together at the end rather than under each ticket: the finished part of an
+// effort is worth seeing, never worth reading before the part still open.
+function mergedFor(keys: string[], merged?: Map<string, MergedPR[]>): MergedPR[] {
+  if (!merged) return [];
+  return keys
+    .flatMap((key) => merged.get(key.toUpperCase()) ?? [])
+    .sort((a, b) => Date.parse(b.mergedAt) - Date.parse(a.mergedAt));
+}
+
 export function Bay({
   group,
   defaultOpen,
@@ -384,25 +394,26 @@ export function Bay({
           <Separator />
           <div data-bay-panel className="space-y-0.5 p-2">
             {group.tickets.map((ticket) => (
-              <div key={ticket.items[0].pr.id}>
-                <Tie tied={ticket.items.length > 1}>
-                  {ticket.items.map((item) => (
-                    <Row
-                      key={item.pr.id}
-                      item={item}
-                      paired={ticket.items.length > 1}
-                      picked={handlers.picked.has(item.pr.id)}
-                      onPick={() => handlers.onPick(item)}
-                      onRelease={() => handlers.onRelease([item])}
-                      busy={handlers.busy.has(item.pr.id)}
-                    />
-                  ))}
-                </Tie>
-                {(merged?.get(ticket.key.toUpperCase()) ?? []).map((pr) => (
-                  <MergedRow key={pr.id} pr={pr} />
+              <Tie key={ticket.items[0].pr.id} tied={ticket.items.length > 1}>
+                {ticket.items.map((item) => (
+                  <Row
+                    key={item.pr.id}
+                    item={item}
+                    paired={ticket.items.length > 1}
+                    picked={handlers.picked.has(item.pr.id)}
+                    onPick={() => handlers.onPick(item)}
+                    onRelease={() => handlers.onRelease([item])}
+                    busy={handlers.busy.has(item.pr.id)}
+                  />
                 ))}
-              </div>
+              </Tie>
             ))}
+            <MergedUnderTickets
+              merged={mergedFor(
+                group.tickets.map((ticket) => ticket.key),
+                merged,
+              )}
+            />
           </div>
         </CollapsibleContent>
       </Collapsible>
@@ -440,28 +451,29 @@ export function Ledger({
         </Badge>
       </div>
       <Card className="gap-0 py-2">
-        <CardContent className="space-y-0.5 px-2">
+        <CardContent data-ledger-panel className="space-y-0.5 px-2">
           {[...byTicket.values()].map((group) => (
-            <div key={group[0].pr.id}>
-              <Tie tied={group.length > 1}>
-                {group.map((item) => (
-                  <Row
-                    key={item.pr.id}
-                    item={item}
-                    paired={group.length > 1}
-                    eyebrow={item.epicId}
-                    picked={handlers.picked.has(item.pr.id)}
-                    onPick={() => handlers.onPick(item)}
-                    onRelease={() => handlers.onRelease([item])}
-                    busy={handlers.busy.has(item.pr.id)}
-                  />
-                ))}
-              </Tie>
-              {(merged?.get((group[0].issue?.id ?? "").toUpperCase()) ?? []).map((pr) => (
-                <MergedRow key={pr.id} pr={pr} />
+            <Tie key={group[0].pr.id} tied={group.length > 1}>
+              {group.map((item) => (
+                <Row
+                  key={item.pr.id}
+                  item={item}
+                  paired={group.length > 1}
+                  eyebrow={item.epicId}
+                  picked={handlers.picked.has(item.pr.id)}
+                  onPick={() => handlers.onPick(item)}
+                  onRelease={() => handlers.onRelease([item])}
+                  busy={handlers.busy.has(item.pr.id)}
+                />
               ))}
-            </div>
+            </Tie>
           ))}
+          <MergedUnderTickets
+            merged={mergedFor(
+              [...byTicket.values()].map((group) => group[0].issue?.id ?? ""),
+              merged,
+            )}
+          />
         </CardContent>
       </Card>
     </section>

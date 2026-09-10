@@ -68,9 +68,10 @@ gate names the environment and who has to approve it.
 cancelled because a later merge overtook it counts as shipped once that later run
 contains your commit.
 
-Merged PRs also show under their ticket in the bays, struck through and carrying
-only the gates they are still stuck at, so a bay shows the whole effort rather
-than the part still open.
+Each bay and ledger also ends with a muted `merged` block: the PRs of those
+tickets that have already landed, with only the gates they are still stuck at.
+A bay then shows the whole effort rather than the part still open, and nothing
+finished sits above something you can act on.
 
 Anything still moving sorts to the top. The window is set on the Settings screen
 and trims finished rows only — a deploy that failed last week stays until you deal

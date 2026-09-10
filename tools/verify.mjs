@@ -410,6 +410,27 @@ for (const theme of ["dark", "light"]) {
     console.log(`merged rows in the bays : ${underTicket}`);
     if (underTicket === 0) problems.push("no merged PR appeared under its ticket");
 
+    // They sit together at the end: no open PR may follow a merged one inside
+    // the same panel.
+    const outOfOrder = await page.evaluate(() =>
+      [...document.querySelectorAll("[data-bay-panel], [data-ledger-panel]")].some((panel) => {
+        const kinds = [...panel.querySelectorAll("[data-pr], [data-merged-row]")].map((row) =>
+          row.hasAttribute("data-merged-row") ? "merged" : "open",
+        );
+        return kinds.indexOf("merged") !== -1 && kinds.lastIndexOf("open") > kinds.indexOf("merged");
+      }),
+    );
+    console.log(`merged rows sit last    : ${outOfOrder ? "NO" : "yes"}`);
+    if (outOfOrder) problems.push("an open PR was rendered below a merged one");
+
+    // The strike-through is gone; muted text and the heading carry it instead.
+    const struck = await page.evaluate(() =>
+      [...document.querySelectorAll("[data-merged-row] a")].some(
+        (node) => getComputedStyle(node).textDecorationLine !== "none",
+      ),
+    );
+    if (struck) problems.push("a merged row is still struck through");
+
     // Releasing a whole bay is a header action now. The demo board has no bay
     // with two ready PRs, so what is checkable here is that the button never
     // takes a row of its own inside the panel.

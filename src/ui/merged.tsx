@@ -5,6 +5,7 @@ import { stripTicketPrefix } from "@/core/link";
 import { timeAgo } from "@/core/store";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
@@ -199,28 +200,43 @@ export function Merged({ view, days }: { view: MergedPR[]; days: number }) {
 }
 
 /**
- * A merged PR sitting under its ticket, in a bay or the ledger. Muted and not
- * selectable: the work is done, and what is left to know is whether it shipped.
+ * The merged PRs of a bay or a ledger, after everything still open. They are
+ * the finished part of the effort: worth seeing for progress, never worth
+ * reading first. One heading rather than a marker per row.
  */
-export function MergedRow({ pr }: { pr: MergedPR }) {
+export function MergedUnderTickets({ merged }: { merged: MergedPR[] }) {
+  if (merged.length === 0) return null;
+
+  return (
+    <div className="pt-1">
+      <Separator className="my-1" />
+      <div className="text-muted-foreground px-2 pt-1 pb-0.5 font-mono text-[10px] tracking-wide">
+        merged
+      </div>
+      {merged.map((pr) => (
+        <MergedRow key={pr.id} pr={pr} />
+      ))}
+    </div>
+  );
+}
+
+function MergedRow({ pr }: { pr: MergedPR }) {
   const live = isLive(pr);
   return (
-    <div
-      data-merged-row
-      className="flex items-center gap-3 rounded-md py-1 pr-2 pl-9 opacity-80"
-    >
+    <div data-merged-row className="flex items-center gap-3 rounded-md px-2 py-1">
       <a
         {...prLink(pr.url)}
-        className="text-muted-foreground min-w-[8rem] flex-1 truncate text-sm line-through decoration-1 hover:underline"
+        className="text-muted-foreground min-w-[8rem] flex-1 truncate text-sm hover:underline"
       >
         {stripTicketPrefix(pr.title)}
       </a>
       <span className="text-muted-foreground hidden shrink-0 font-mono text-[11px] sm:inline">
+        {pr.issueKey ? `${pr.issueKey} ` : ""}
         {pr.repo} #{pr.number}
       </span>
       <span className="flex shrink-0 items-center gap-1">
         {live ? (
-          <span className="font-mono text-[10px] text-[var(--ok)]">merged · live</span>
+          <span className="font-mono text-[10px] text-[var(--ok)]">live</span>
         ) : (
           shown(pr.steps)
             .filter((step) => step.state !== "ok")
