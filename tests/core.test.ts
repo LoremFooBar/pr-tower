@@ -3,7 +3,8 @@ import { buildItem, gatesFor, scoreFor, stageOf } from "../src/core/rank";
 import { canonicalPRUrl, linkPR, buildIssueIndex, prTicketKey, stripTicketPrefix } from "../src/core/link";
 import { authorKind, groupComments, latestPerName, resolveChecks, runState, worstOf } from "../server/github";
 import type { RawComment } from "../server/github";
-import { noticeFor, unseen } from "../src/core/notify";
+import { noticeFor, stateNotice, unseen } from "../src/core/notify";
+import { prMoves } from "../src/core/watch";
 import { prLink } from "../src/lib/prhub";
 import { nextStages } from "../src/core/search";
 import type {
@@ -1119,7 +1120,91 @@ describe("what the desktop is told", () => {
   });
 
   it("passes over what has already been raised", () => {
-    expect(unseen([alert(), alert({ id: "issue:2" })], new Set(["issue:1"]))).toHaveLength(1);
+    const raised = [noticeFor(alert()), noticeFor(alert({ id: "issue:2" }))];
+    expect(unseen(raised, new Set(["issue:1"]))).toHaveLength(1);
+  });
+});
+
+describe("a PR that moved between two refreshes", () => {
+  function open(over: Partial<PullRequest> = {}): PullRequest {
+    return pr({ number: 888, repo: "web", headSha: "sha", draft: false, ...over });
+  }
+
+  function landed(from: PullRequest, over: Partial<MergedPR> = {}): MergedPR {
+    return {
+      id: from.id,
+      number: from.number,
+      title: from.title,
+      url: from.url,
+      owner: from.owner,
+      repo: from.repo,
+      mergedAt: "2026-08-26T11:00:00Z",
+      mergeSha: "abc",
+      steps: [],
+      state: "none",
+      ...over,
+    };
+  }
+
+  it("reports a PR that was open last time and is merged now", () => {
+    const was = open();
+    const moves = prMoves([was], [], [landed(was)]);
+    expect(moves).toHaveLength(1);
+    expect(moves[0]).toMatchObject({ kind: "merged", number: 888, repo: "web" });
+    expect(moves[0].id).toBe(`merged:${was.id}`);
+  });
+
+  it("says nothing about a PR that was already merged when the server started", () => {
+    expect(prMoves([], [], [landed(open())])).toEqual([]);
+  });
+
+  it("says nothing about a PR that was closed without merging", () => {
+    expect(prMoves([open()], [], [])).toEqual([]);
+  });
+
+  it("reports the person who approved", () => {
+    const was = open();
+    const now = { ...was, approvedBy: ["dana"], approvals: 1 };
+    const moves = prMoves([was], [now], []);
+    expect(moves).toHaveLength(1);
+    expect(moves[0]).toMatchObject({ kind: "approved", by: ["dana"] });
+  });
+
+  it("says nothing about an approval it has already reported", () => {
+    const was = open({ approvedBy: ["dana"], approvals: 1 });
+    expect(prMoves([was], [{ ...was }], [])).toEqual([]);
+  });
+
+  it("reports a second approver as its own arrival", () => {
+    const was = open({ approvedBy: ["dana"], approvals: 1 });
+    const now = { ...was, approvedBy: ["dana", "omri"], approvals: 2 };
+    const moves = prMoves([was], [now], []);
+    expect(moves[0].by).toEqual(["omri"]);
+    expect(moves[0].id).toBe(`approved:${was.id}:omri`);
+  });
+
+  // A PR whose enrichment failed carries no approvals at all, so comparing it
+  // against a good read would announce approvals the reader has long seen.
+  it("says nothing when either read of the PR failed to enrich", () => {
+    const was = open({ headSha: undefined });
+    const now = open({ id: was.id, approvedBy: ["dana"], approvals: 1 });
+    expect(prMoves([was], [now], [])).toEqual([]);
+  });
+
+  it("names the change and carries the PR title", () => {
+    const was = open();
+    const [merge] = prMoves([was], [], [landed(was)]);
+    expect(stateNotice(merge).title).toBe("web #888 was merged");
+    expect(stateNotice(merge).body).toBe("A change");
+
+    const [approval] = prMoves([was], [{ ...was, approvedBy: ["dana"], approvals: 1 }], []);
+    expect(stateNotice(approval).title).toBe("dana approved web #888");
+  });
+
+  it("names every approver that arrived together", () => {
+    const was = open();
+    const [approval] = prMoves([was], [{ ...was, approvedBy: ["dana", "omri"], approvals: 2 }], []);
+    expect(stateNotice(approval).title).toBe("dana, omri approved web #888");
   });
 });
 

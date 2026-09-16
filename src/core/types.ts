@@ -33,6 +33,9 @@ export interface PullRequest {
   deletions?: number;
   changedFiles?: number;
   approvals: number;
+  // The people whose latest review is an approval. `approvals` is its length;
+  // the names are what lets a new approval be told from an existing one.
+  approvedBy?: string[];
   changesRequested: number;
   // People other than the author who have submitted a review of any kind,
   // comments included. Bots are left out: Bugbot's verdict has its own field,
@@ -69,6 +72,24 @@ export interface CommentAlert {
   /** The newest comment's text, flattened and clipped. */
   excerpt: string;
   at: string;
+}
+
+// A PR reaching a point worth being told about away from the board.
+export type StateChange = "merged" | "approved";
+
+// One such moment. Raised by comparing a refresh against the one before it, so
+// it exists only for a change this container actually watched happen.
+export interface StateAlert {
+  /** Stable for the change itself: a second approval is a second arrival. */
+  id: string;
+  kind: StateChange;
+  prId: number;
+  repo: string;
+  number: number;
+  title: string;
+  url: string;
+  /** Set on an approval: whoever approved since the last refresh. */
+  by?: string[];
 }
 
 export interface Reviewer {
@@ -264,6 +285,7 @@ export interface Data {
   issues: LinearIssue[];
   rollups: EpicRollup[];
   alerts: CommentAlert[];
+  stateAlerts: StateAlert[];
   merged: MergedPR[];
   at: number;
   login: string;

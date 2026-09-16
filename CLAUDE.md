@@ -104,7 +104,8 @@ src/core/     pure logic, all unit tested, runs in the browser
   model.ts    buildModel: PRs to tickets to parent epics, plus the send queue
   api.ts      the client's only outside contact — this app's own backend
   merged.ts   merged PRs: the deploy order, and the collapsed line
-  notify.ts   comment arrivals to desktop notification wording
+  notify.ts   comment and state arrivals to desktop notification wording
+  watch.ts    what moved between two refreshes: a merge, an approval
   store.ts    a date helper; the browser stores nothing
 src/ui/       Preact components (board, parts, merged, setup)
 tools/        font embedding, the mock upstream, the verification harness
@@ -186,6 +187,29 @@ gets its permission withdrawn.
 - **The mute lasts for the session.** The browser's permission is the switch that
   survives a reload; the bell is an in-page toggle, because the browser stores
   nothing.
+
+### A PR that merged, and a PR that was approved
+
+Two more things raise a notification. Both are read by comparing a refresh
+against the one before it — `prMoves` in `src/core/watch.ts` — because GitHub
+answers neither question with a "since" filter.
+
+- **Only a move this container watched happen is announced.** A merge needs the
+  PR to have been open at the previous refresh, so a fresh container says
+  nothing about work that finished before it started. Same baseline rule as the
+  comment sweep, and the same reason.
+- **A closed PR is not a merged one.** The merge is read from the recently
+  merged list, which is fetched anyway, so a PR closed without merging goes
+  quiet rather than claiming to have shipped.
+- **An approval is a set of people, not a count.** `approvedBy` on the PR names
+  them, so a second approver is an arrival of its own, an approval dismissed and
+  given again is not announced twice, and the notification can say who.
+- **A PR whose enrichment failed approves nobody.** Both reads have to carry a
+  `headSha`, or one failed call followed by a good one announces every approval
+  the PR already had.
+- **`noticesFor` is the one list.** A comment and a state change become the same
+  `Notice`, so the page's baseline, the mute and the one-tag-per-arrival rule
+  hold for all of them without being written twice.
 
 ## Recently merged
 

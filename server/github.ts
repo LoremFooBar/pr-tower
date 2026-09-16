@@ -205,7 +205,8 @@ async function enrich(
         latest.set(review.user.login, review.state);
       }
     }
-    base.approvals = [...latest.values()].filter((state) => state === "APPROVED").length;
+    base.approvedBy = [...latest].filter(([, state]) => state === "APPROVED").map(([who]) => who);
+    base.approvals = base.approvedBy.length;
     base.changesRequested = [...latest.values()].filter((state) => state === "CHANGES_REQUESTED").length;
 
     // Anyone who submitted a review, whatever its verdict — GitHub records a

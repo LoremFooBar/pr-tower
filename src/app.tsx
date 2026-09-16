@@ -13,13 +13,13 @@ import {
   type Data,
   type Status,
 } from "@/core/api";
-import { noticeFor, unseen } from "@/core/notify";
+import { noticesFor, unseen, type Notice } from "@/core/notify";
 import { nextStages } from "@/core/search";
 import { mergedView } from "@/core/merged";
 import { timeAgo } from "@/core/store";
 import { cn } from "@/lib/utils";
 import { stripTicketPrefix } from "@/core/link";
-import type { CommentAlert, Item, Stage } from "@/core/types";
+import type { Item, Stage } from "@/core/types";
 import { Setup } from "@/ui/setup";
 import { Bay, Ledger, Queue, Stages, STAGE_PROSE, type Handlers } from "@/ui/board";
 import { Merged } from "@/ui/merged";
@@ -57,9 +57,9 @@ import {
 const UNDO_MS = 10_000;
 
 const NOTICE_TIP: Record<string, string> = {
-  live: "A new comment from a person or from Bugbot raises a desktop notification. Muting lasts until you reload.",
-  granted: "Muted. Click to hear about new comments again.",
-  default: "Notify me when a person or Bugbot comments on one of my PRs.",
+  live: "A comment from a person or from Bugbot, an approval, and a merge each raise a desktop notification. Muting lasts until you reload.",
+  granted: "Muted. Click to hear about your PRs again.",
+  default: "Notify me when one of my PRs is commented on, approved or merged.",
   denied: "Your browser is blocking notifications for this page. Allow them in its site settings.",
 };
 
@@ -70,7 +70,8 @@ function readPermission(): Permission {
 }
 
 /**
- * Raises a desktop notification for each comment the server reports as new.
+ * Raises a desktop notification for everything the server reports as new: a
+ * comment, an approval, a merge.
  *
  * The first snapshot a page receives is the baseline, never an announcement: it
  * carries whatever the last refresh found, which on a reload is a conversation
@@ -78,7 +79,7 @@ function readPermission(): Permission {
  * service worker — the app deliberately registers none, and desktop Chromium
  * does not need one to show a notification.
  */
-function useArrivals(alerts: CommentAlert[] | undefined, live: boolean) {
+function useArrivals(notices: Notice[] | undefined, live: boolean) {
   const seen = useRef<Set<string> | null>(null);
   // Read through a ref so muting takes effect without the effect re-running
   // over an unchanged list.
@@ -86,17 +87,17 @@ function useArrivals(alerts: CommentAlert[] | undefined, live: boolean) {
   on.current = live;
 
   useEffect(() => {
-    if (!alerts) return;
+    if (!notices) return;
     if (!seen.current) {
-      seen.current = new Set(alerts.map((alert) => alert.id));
+      seen.current = new Set(notices.map((notice) => notice.tag));
       return;
     }
 
-    const fresh = unseen(alerts, seen.current);
-    for (const alert of fresh) seen.current.add(alert.id);
+    const fresh = unseen(notices, seen.current);
+    for (const notice of fresh) seen.current.add(notice.tag);
     if (!on.current || readPermission() !== "granted") return;
 
-    for (const notice of fresh.map(noticeFor)) {
+    for (const notice of fresh) {
       const shown = new Notification(notice.title, {
         body: notice.body,
         // Same-origin, which is all the page's own CSP allows.
@@ -109,7 +110,7 @@ function useArrivals(alerts: CommentAlert[] | undefined, live: boolean) {
         shown.close();
       };
     }
-  }, [alerts]);
+  }, [notices]);
 }
 
 function prose(stages: Set<Stage>): string {
@@ -156,7 +157,8 @@ function App() {
   const [permission, setPermission] = useState<Permission>(readPermission);
   const [muted, setMuted] = useState(false);
   const live = permission === "granted" && !muted;
-  useArrivals(snapshot?.alerts, live);
+  const notices = useMemo(() => (snapshot ? noticesFor(snapshot) : undefined), [snapshot]);
+  useArrivals(notices, live);
 
   const model = useMemo(
     () =>
@@ -449,7 +451,7 @@ function App() {
                   variant="ghost"
                   size="sm"
                   onClick={toggleNotices}
-                  aria-label={live ? "Mute comment notifications" : "Notify me about new comments"}
+                  aria-label={live ? "Mute notifications" : "Notify me about my PRs"}
                 >
                   {live ? <Bell className="size-3.5" /> : <BellOff className="size-3.5" />}
                 </Button>

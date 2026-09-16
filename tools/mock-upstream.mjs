@@ -61,6 +61,27 @@ createServer(async (req, res) => {
     return json(res, { items: merged ? (fixture.merged ?? []) : fixture.items });
   }
 
+  // A fixture read from disk cannot express "was open last refresh, merged
+  // now", which is the only way a merge or an approval can be noticed at all.
+  // These two endpoints let the test move a PR between refreshes.
+  let control = path.match(/^\/__merge\/(\d+)$/);
+  if (control) {
+    const index = fixture.items.findIndex((item) => item.number === Number(control[1]));
+    const [item] = index === -1 ? [] : fixture.items.splice(index, 1);
+    if (item) fixture.merged = [...(fixture.merged ?? []), { ...item, closed_at: new Date().toISOString() }];
+    return json(res, { moved: Boolean(item) });
+  }
+
+  control = path.match(/^\/__approve\/([^/]+)\/([^/]+)\/(\d+)\/([^/]+)$/);
+  if (control) {
+    const key = `${control[1]}/${control[2]}/${control[3]}`;
+    fixture.reviews[key] = [
+      ...(fixture.reviews[key] ?? []),
+      { state: "APPROVED", user: { login: control[4], type: "User" } },
+    ];
+    return json(res, { approved: true });
+  }
+
   let m2 = path.match(/^\/repos\/[^/]+\/[^/]+\/actions\/runs\/(\d+)\/pending_deployments$/);
   if (m2) return json(res, fixture.pending?.[m2[1]] ?? []);
 

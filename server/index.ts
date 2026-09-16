@@ -12,6 +12,7 @@ import {
   validateToken,
 } from "./github";
 import { fetchAssignedIssues, fetchEpicRollups, validateKey } from "./linear";
+import { prMoves } from "../src/core/watch";
 import { envPinned, loadTokens, saveTokens } from "./config";
 import type { CommentAlert, Data, EpicRollup, LinearIssue } from "../src/core/types";
 import type { SettledDeploy } from "./github";
@@ -204,12 +205,17 @@ function refresh(force: boolean): Promise<Snapshot> {
       frozen,
     ).catch(() => ({ merged: [] as Data["merged"], settled: frozen }));
 
+    // The previous refresh's open PRs are the only record of what a PR used to
+    // be, so a merge or an approval is read here rather than asked for.
+    const stateAlerts = prMoves(snapshot?.public.prs ?? [], prs, shipped.merged);
+
     const next: Snapshot = {
       public: {
         prs,
         issues,
         rollups,
         alerts,
+        stateAlerts,
         merged: shipped.merged,
         at: Date.now(),
         login: user.login,

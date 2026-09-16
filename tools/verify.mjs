@@ -544,9 +544,10 @@ for (const theme of ["dark", "light"]) {
 }
 
 // Desktop notifications. The page raises one per author per PR for the comments
-// the server reports as new, and says nothing about the bots nobody asked for or
-// about the reader's own remarks. The Notification constructor is replaced so
-// the test can read what would have been shown.
+// the server reports as new, one for a PR that merged and one for an approval,
+// and says nothing about the bots nobody asked for or about the reader's own
+// remarks. The Notification constructor is replaced so the test can read what
+// would have been shown.
 {
   const page = await browser.newPage({
     viewport: { width: 1180, height: 900 },
@@ -574,6 +575,12 @@ for (const theme of ["dark", "light"]) {
   await page.goto(`http://localhost:${APP}/`);
   await page.getByRole("button", { name: /Ready to release/ }).waitFor({ timeout: 20000 });
 
+  // A PR moves while the board is open: one merges, one is approved. Both are
+  // read by comparing this refresh against the last, so the page must have
+  // loaded before they happen.
+  await fetch(`http://localhost:${UPSTREAM}/__merge/412`);
+  await fetch(`http://localhost:${UPSTREAM}/__approve/acme/web/915/nadia`);
+
   // Whatever the page loaded with is its baseline. This sweep is the one it
   // should speak about.
   await fetch(`http://localhost:${APP}/api/data?force=1`);
@@ -581,7 +588,7 @@ for (const theme of ["dark", "light"]) {
 
   const notes = await page.evaluate(() => window.__notes ?? []);
   const titles = notes.map((note) => note.title);
-  console.log(`comment notifications   : ${titles.length}`);
+  console.log(`notifications           : ${titles.length}`);
   for (const title of titles) console.log(`  ${title}`);
 
   // dana wrote one conversation comment and one review message on web #888.
@@ -598,17 +605,23 @@ for (const theme of ["dark", "light"]) {
   if (titles.some((title) => /^you commented/.test(title))) {
     problems.push("the reader's own comment raised a notification");
   }
+  if (!titles.some((title) => /^billing-api #412 was merged$/.test(title))) {
+    problems.push("a PR merged while the board was open raised no notification");
+  }
+  if (!titles.some((title) => /^nadia approved web #915$/.test(title))) {
+    problems.push("an approval raised no notification, or did not name who gave it");
+  }
   if (notes.some((note) => !note.body)) problems.push("a notification carried no body");
   if (new Set(notes.map((note) => note.tag)).size !== notes.length) {
     problems.push("two notifications shared a tag and would replace each other");
   }
 
   // The control is one glyph in the header, and the mute is the same click back.
-  const mute = page.getByRole("button", { name: "Mute comment notifications" });
+  const mute = page.getByRole("button", { name: "Mute notifications" });
   if ((await mute.count()) !== 1) problems.push("the notification control is missing");
   else {
     await mute.click();
-    const unmute = page.getByRole("button", { name: "Notify me about new comments" });
+    const unmute = page.getByRole("button", { name: "Notify me about my PRs" });
     const flipped = (await unmute.count()) === 1;
     console.log(`mute flips the control   : ${flipped ? "yes" : "NO"}`);
     if (!flipped) problems.push("muting did not change the notification control");
