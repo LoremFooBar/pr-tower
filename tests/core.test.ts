@@ -1127,7 +1127,7 @@ describe("what the desktop is told", () => {
 
 describe("a PR that moved between two refreshes", () => {
   function open(over: Partial<PullRequest> = {}): PullRequest {
-    return pr({ number: 888, repo: "web", headSha: "sha", draft: false, ...over });
+    return pr({ number: 888, repo: "web", approvedBy: [], draft: false, ...over });
   }
 
   function landed(from: PullRequest, over: Partial<MergedPR> = {}): MergedPR {
@@ -1183,10 +1183,11 @@ describe("a PR that moved between two refreshes", () => {
     expect(moves[0].id).toBe(`approved:${was.id}:omri`);
   });
 
-  // A PR whose enrichment failed carries no approvals at all, so comparing it
-  // against a good read would announce approvals the reader has long seen.
-  it("says nothing when either read of the PR failed to enrich", () => {
-    const was = open({ headSha: undefined });
+  // A PR whose enrichment failed carries no list of approvers, and neither does
+  // a snapshot written before the app kept one. Reading either as "nobody had
+  // approved" announces approvals the reader has long seen.
+  it("says nothing when the previous read named no approvers at all", () => {
+    const was = open({ approvedBy: undefined });
     const now = open({ id: was.id, approvedBy: ["dana"], approvals: 1 });
     expect(prMoves([was], [now], [])).toEqual([]);
   });

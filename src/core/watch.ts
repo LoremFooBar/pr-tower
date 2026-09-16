@@ -33,11 +33,12 @@ export function prMoves(
 
   for (const pr of after) {
     const previous = was.get(pr.id);
-    // A PR whose enrichment failed reports no approvals at all. Without both
-    // sides of the comparison being enriched, one failed read followed by a
-    // good one announces every approval the PR already had as new.
-    if (!previous?.headSha || !pr.headSha) continue;
-    const fresh = (pr.approvedBy ?? []).filter((who) => !(previous.approvedBy ?? []).includes(who));
+    // No list at all is a PR whose enrichment failed, or a snapshot written
+    // before this app recorded approvers. Either way it is not evidence that
+    // nobody had approved, and reading it as one announces every approval the
+    // PR already had. An empty list is evidence, and is compared.
+    if (!previous?.approvedBy) continue;
+    const fresh = (pr.approvedBy ?? []).filter((who) => !previous.approvedBy!.includes(who));
     if (fresh.length === 0) continue;
     alerts.push({
       id: `approved:${pr.id}:${[...fresh].sort().join(",")}`,

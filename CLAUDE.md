@@ -204,9 +204,10 @@ answers neither question with a "since" filter.
 - **An approval is a set of people, not a count.** `approvedBy` on the PR names
   them, so a second approver is an arrival of its own, an approval dismissed and
   given again is not announced twice, and the notification can say who.
-- **A PR whose enrichment failed approves nobody.** Both reads have to carry a
-  `headSha`, or one failed call followed by a good one announces every approval
-  the PR already had.
+- **No list of approvers is not an empty one.** A PR whose enrichment failed
+  carries none, and so does a snapshot written before the app kept one — so the
+  previous read must actually name its approvers, or the first refresh after an
+  upgrade announces every approval already on the board.
 - **`noticesFor` is the one list.** A comment and a state change become the same
   `Notice`, so the page's baseline, the mute and the one-tag-per-arrival rule
   hold for all of them without being written twice.
