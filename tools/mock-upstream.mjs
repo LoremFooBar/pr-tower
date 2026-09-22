@@ -14,6 +14,10 @@ const fixture = JSON.parse(
 // enough: the server qualifies each id with the surface it arrived on.
 let commentId = 1000;
 
+// Flipped by /__linear/down and /__linear/up, so the test can see what a
+// refresh does when only the ticket half fails.
+let linearDown = false;
+
 const json = (res, body) => {
   res.writeHead(200, { "content-type": "application/json" });
   res.end(JSON.stringify(body));
@@ -24,6 +28,10 @@ createServer(async (req, res) => {
   const path = url.pathname;
 
   if (path === "/linear") {
+    if (linearDown) {
+      res.writeHead(503, { "content-type": "application/json" });
+      return res.end("{}");
+    }
     let body = "";
     for await (const chunk of req) body += chunk;
     const query = JSON.parse(body || "{}").query ?? "";
@@ -80,6 +88,14 @@ createServer(async (req, res) => {
       { state: "APPROVED", user: { login: control[4], type: "User" } },
     ];
     return json(res, { approved: true });
+  }
+
+  // The ticket half failing on its own: the board must keep the epics it read
+  // last time rather than regrouping every PR as standalone.
+  control = path.match(/^\/__linear\/(down|up)$/);
+  if (control) {
+    linearDown = control[1] === "down";
+    return json(res, { linearDown });
   }
 
   let m2 = path.match(/^\/repos\/[^/]+\/[^/]+\/actions\/runs\/(\d+)\/pending_deployments$/);

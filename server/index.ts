@@ -11,10 +11,10 @@ import {
   sendForReview,
   validateToken,
 } from "./github";
-import { fetchAssignedIssues, fetchEpicRollups, validateKey } from "./linear";
+import { fetchTickets, validateKey } from "./linear";
 import { prMoves } from "../src/core/watch";
 import { envPinned, loadTokens, saveTokens } from "./config";
-import type { CommentAlert, Data, EpicRollup, LinearIssue } from "../src/core/types";
+import type { CommentAlert, Data } from "../src/core/types";
 import type { SettledDeploy } from "./github";
 
 const PORT = Number(process.env.PORT ?? 5178);
@@ -156,25 +156,7 @@ function refresh(force: boolean): Promise<Snapshot> {
     if (!tokens.githubToken) throw new Error("No GitHub token is configured.");
     const user = await validateToken(tokens.githubToken);
 
-    // Linear must not be able to fail the refresh; the PR half stands alone.
-    const issues = tokens.linearKey
-      ? await fetchAssignedIssues(tokens.linearKey).catch(() => [] as LinearIssue[])
-      : [];
-
-    // Progress per parent needs every child, including the ones assigned to
-    // nobody, so it is a separate query keyed by the parents actually in play.
-    const parentUuids = [
-      ...new Set(
-        issues
-          .filter((issue) => issues.some((child) => child.parentId === issue.id))
-          .map((issue) => issue.uuid)
-          .filter((uuid): uuid is string => Boolean(uuid)),
-      ),
-    ];
-    const rollups =
-      tokens.linearKey && parentUuids.length > 0
-        ? await fetchEpicRollups(tokens.linearKey, parentUuids).catch(() => [] as EpicRollup[])
-        : [];
+    const { issues, rollups, linear } = await fetchTickets(tokens.linearKey, snapshot?.public);
 
     const { prs, notes } = await fetchMyOpenPRs(tokens.githubToken, user.login, tokens.org);
 
@@ -219,6 +201,7 @@ function refresh(force: boolean): Promise<Snapshot> {
         merged: shipped.merged,
         at: Date.now(),
         login: user.login,
+        linear,
       },
       cursors: {
         commentsSince: sweptAt,

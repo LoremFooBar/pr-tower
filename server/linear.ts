@@ -1,10 +1,24 @@
-import type { EpicRollup, LinearIssue, LinearStateType } from "../src/core/types";
+import type { Data, EpicRollup, LinearHealth, LinearIssue, LinearStateType } from "../src/core/types";
 
 const API = process.env.LINEAR_API ?? "https://api.linear.app/graphql";
 const PAGE_SIZE = 100;
 const MAX_PAGES = 6;
 
-export class LinearError extends Error {}
+export class LinearError extends Error {
+  constructor(
+    message: string,
+    readonly retryable = false,
+  ) {
+    super(message);
+  }
+}
+
+// A rate limit or a five-hundred is the same request arriving at a bad moment,
+// and one of them silently emptying the board costs every epic on it. A
+// rejected key is not retried: it will be rejected again.
+const ATTEMPTS = 3;
+const BACKOFF_MS = 400;
+const TIMEOUT_MS = 20_000;
 
 interface RawState {
   name: string;
@@ -27,21 +41,44 @@ interface RawIssue extends RawParent {
   inverseRelations: { nodes: { type: string; issue: { identifier: string } | null }[] };
 }
 
-async function graphql<T>(key: string, query: string, variables: Record<string, unknown> = {}): Promise<T> {
-  const res = await fetch(API, {
-    method: "POST",
-    // A personal API key goes in Authorization raw. "Bearer" is for OAuth
-    // access tokens only, and Linear rejects it here.
-    headers: { Authorization: key, "Content-Type": "application/json" },
-    body: JSON.stringify({ query, variables }),
-  });
+async function once<T>(key: string, query: string, variables: Record<string, unknown>): Promise<T> {
+  let res: Response;
+  try {
+    res = await fetch(API, {
+      method: "POST",
+      // A personal API key goes in Authorization raw. "Bearer" is for OAuth
+      // access tokens only, and Linear rejects it here.
+      headers: { Authorization: key, "Content-Type": "application/json" },
+      body: JSON.stringify({ query, variables }),
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+  } catch (err) {
+    throw new LinearError(err instanceof Error ? err.message : "Linear is unreachable.", true);
+  }
   if (!res.ok) {
-    throw new LinearError(res.status === 400 || res.status === 401 ? "Key rejected." : `Linear returned ${res.status}.`);
+    if (res.status === 400 || res.status === 401) throw new LinearError("Key rejected.");
+    throw new LinearError(`Linear returned ${res.status}.`, res.status === 429 || res.status >= 500);
   }
   const body = await res.json();
-  if (body.errors?.length) throw new LinearError(body.errors[0].message);
-  if (!body.data) throw new LinearError("Linear returned no data.");
+  if (body.errors?.length) {
+    const first = body.errors[0];
+    const code = String(first?.extensions?.code ?? "");
+    throw new LinearError(first.message, code === "RATELIMITED" || code === "INTERNAL_SERVER_ERROR");
+  }
+  if (!body.data) throw new LinearError("Linear returned no data.", true);
   return body.data as T;
+}
+
+async function graphql<T>(key: string, query: string, variables: Record<string, unknown> = {}): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await once<T>(key, query, variables);
+    } catch (err) {
+      const retryable = err instanceof LinearError && err.retryable;
+      if (!retryable || attempt >= ATTEMPTS) throw err;
+      await new Promise((done) => setTimeout(done, BACKOFF_MS * 2 ** (attempt - 1)));
+    }
+  }
 }
 
 const STATE_TYPES: LinearStateType[] = ["backlog", "unstarted", "started", "completed", "canceled"];
@@ -110,10 +147,21 @@ const ASSIGNED = `
 // assigned. The whole assigned set is fetched because Linear's issue filter has
 // no operator taking a list of "ACME-1221" identifiers — its `id` filter wants
 // UUIDs, which a PR title never carries.
-export async function fetchAssignedIssues(key: string): Promise<LinearIssue[]> {
+export interface AssignedIssues {
+  issues: LinearIssue[];
+  /**
+   * False when Linear still had pages left at MAX_PAGES. The set is then a
+   * prefix of your assigned issues, so a ticket can be missing and its PR can
+   * land in the wrong group — which the board has to be able to say.
+   */
+  complete: boolean;
+}
+
+export async function fetchAssignedIssues(key: string): Promise<AssignedIssues> {
   const issues: LinearIssue[] = [];
   const parents = new Map<string, LinearIssue>();
   let after: string | null = null;
+  let complete = false;
 
   for (let page = 0; page < MAX_PAGES; page++) {
     const data: { issues: { pageInfo: { hasNextPage: boolean; endCursor: string | null }; nodes: RawIssue[] } } =
@@ -122,14 +170,17 @@ export async function fetchAssignedIssues(key: string): Promise<LinearIssue[]> {
       issues.push(toIssue(node));
       if (node.parent) parents.set(node.parent.identifier, toParentStub(node.parent));
     }
-    if (!data.issues.pageInfo.hasNextPage) break;
+    if (!data.issues.pageInfo.hasNextPage) {
+      complete = true;
+      break;
+    }
     after = data.issues.pageInfo.endCursor;
   }
 
   const seen = new Set(issues.map((issue) => issue.id));
   for (const [id, stub] of parents) if (!seen.has(id)) issues.push(stub);
 
-  return issues;
+  return { issues, complete };
 }
 
 const CHILDREN = `
@@ -186,4 +237,69 @@ export async function fetchEpicRollups(
   }
 
   return [...byParent.values()];
+}
+
+/**
+ * The ticket half of a refresh, and how much of it to believe. Linear must not
+ * be able to fail the refresh — the PR half stands alone — but it must also not
+ * be able to silently empty it: with no issues every PR falls out of its epic
+ * and into the singles ledger, which looks exactly like a board where nothing
+ * is grouped. The previous refresh's issues are kept instead, and the page is
+ * told they are old.
+ */
+export async function fetchTickets(
+  key: string | undefined,
+  previous: Data | undefined,
+): Promise<{ issues: LinearIssue[]; rollups: EpicRollup[]; linear: LinearHealth }> {
+  if (!key) return { issues: [], rollups: [], linear: { state: "off" } };
+
+  const why = (err: unknown) => (err instanceof Error ? err.message : "Linear did not answer.");
+  const readAt = previous?.linear?.at ?? previous?.at;
+
+  let assigned;
+  try {
+    assigned = await fetchAssignedIssues(key);
+  } catch (err) {
+    const issues = previous?.issues ?? [];
+    return {
+      issues,
+      rollups: previous?.rollups ?? [],
+      linear: { state: issues.length ? "stale" : "missing", at: readAt, error: why(err) },
+    };
+  }
+
+  // Progress per parent needs every child, including the ones assigned to
+  // nobody, so it is a separate query keyed by the parents actually in play.
+  const parentUuids = [
+    ...new Set(
+      assigned.issues
+        .filter((issue) => assigned.issues.some((child) => child.parentId === issue.id))
+        .map((issue) => issue.uuid)
+        .filter((uuid): uuid is string => Boolean(uuid)),
+    ),
+  ];
+
+  let rollups: EpicRollup[] = [];
+  if (parentUuids.length > 0) {
+    try {
+      rollups = await fetchEpicRollups(key, parentUuids);
+    } catch (err) {
+      // The issues themselves arrived, so the grouping stands; what is lost is
+      // how far each epic has come — and an epic with one open PR earns its bay
+      // from that count alone, so this drops sections, not only spine cells.
+      return {
+        issues: assigned.issues,
+        rollups: previous?.rollups ?? [],
+        linear: { state: "stale", at: readAt, error: why(err) },
+      };
+    }
+  }
+
+  return {
+    issues: assigned.issues,
+    rollups,
+    linear: assigned.complete
+      ? { state: "ok", at: Date.now() }
+      : { state: "partial", at: Date.now(), error: "Linear has more assigned issues than were read." },
+  };
 }

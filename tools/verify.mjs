@@ -630,6 +630,41 @@ for (const theme of ["dark", "light"]) {
   await page.close();
 }
 
+// Linear failing on its own. The board has to keep the epics it already read
+// and say that it did: dropping them regroups every PR under "Single tickets",
+// which is a wrong board that looks exactly like a right one.
+{
+  const page = await browser.newPage({ viewport: { width: 1180, height: 900 } });
+  page.on("pageerror", (error) => problems.push(`[linear] ${error}`));
+  await page.goto(`http://localhost:${APP}/`);
+  await page.getByRole("heading", { name: "By parent task" }).waitFor({ timeout: 20000 });
+  const baysBefore = await page.locator("#app [data-bay-header]").count();
+
+  await fetch(`http://localhost:${UPSTREAM}/__linear/down`);
+  await fetch(`http://localhost:${APP}/api/data?force=1`);
+  await page.waitForTimeout(2500);
+
+  const health = (await (await fetch(`http://localhost:${APP}/api/data`)).json()).linear ?? {};
+  const baysAfter = await page.locator("#app [data-bay-header]").count();
+  const warned = await page.locator("#app", { hasText: "Linear did not answer" }).count();
+  console.log(`linear outage           : ${health.state} · bays ${baysBefore}→${baysAfter} · warned ${warned}`);
+
+  if (health.state !== "stale") problems.push(`a Linear outage reported ${health.state}, not stale`);
+  if (baysAfter !== baysBefore) problems.push("a Linear outage changed how the PRs are grouped");
+  if (warned === 0) problems.push("a Linear outage was not said out loud on the page");
+
+  await fetch(`http://localhost:${UPSTREAM}/__linear/up`);
+  await fetch(`http://localhost:${APP}/api/data?force=1`);
+  await page.waitForTimeout(2500);
+  const stillWarned = await page.locator("#app", { hasText: "Linear did not answer" }).count();
+  const recovered = (await (await fetch(`http://localhost:${APP}/api/data`)).json()).linear ?? {};
+  console.log(`linear back             : ${recovered.state} · warned ${stillWarned}`);
+  if (recovered.state !== "ok") problems.push("Linear recovered and the board still calls it stale");
+  if (stillWarned !== 0) problems.push("the outage warning outlived the outage");
+
+  await page.close();
+}
+
 // Opening a PR with no extension installed. The test browser has none, so this
 // is the plain case: a real anchor, a real new tab, nothing intercepting. The
 // second half marks the page the way the extension does, to prove the marker is

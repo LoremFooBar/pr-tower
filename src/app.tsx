@@ -19,7 +19,7 @@ import { mergedView } from "@/core/merged";
 import { timeAgo } from "@/core/store";
 import { cn } from "@/lib/utils";
 import { stripTicketPrefix } from "@/core/link";
-import type { Item, Stage } from "@/core/types";
+import type { Item, LinearHealth, Stage } from "@/core/types";
 import { Setup } from "@/ui/setup";
 import { Bay, Ledger, Queue, Stages, STAGE_PROSE, type Handlers } from "@/ui/board";
 import { Merged } from "@/ui/merged";
@@ -43,6 +43,7 @@ import { Separator } from "@/components/ui/separator";
 import "@/fonts.css";
 import "@/styles.css";
 import {
+  AlertTriangle,
   Bell,
   BellOff,
   SlidersHorizontal,
@@ -127,6 +128,43 @@ function useSystemTheme() {
     media.addEventListener("change", apply);
     return () => media.removeEventListener("change", apply);
   }, []);
+}
+
+/**
+ * Said out loud, because a board missing its Linear data does not look broken:
+ * it looks like a board whose PRs have no epics. Every such PR drops into the
+ * singles ledger, which is a wrong answer given with the same confidence as a
+ * right one.
+ */
+function TicketWarning({
+  health,
+  onRetry,
+  busy,
+}: {
+  health: LinearHealth | undefined;
+  onRetry: () => void;
+  busy: boolean;
+}) {
+  if (!health || health.state === "ok" || health.state === "off") return null;
+
+  const said =
+    health.state === "missing"
+      ? "Linear did not answer, so no PR is grouped under its ticket or epic."
+      : health.state === "partial"
+        ? "Only part of your Linear issues could be read, so a PR can sit under the wrong epic."
+        : health.at
+          ? `Linear did not answer. Tickets and epics are from ${timeAgo(health.at)} and may have moved since.`
+          : "Linear did not answer. Ticket grouping may be out of date.";
+
+  return (
+    <div className="flex items-center gap-3 rounded-lg border border-[var(--warn)]/40 bg-[var(--warn)]/8 p-3 text-sm">
+      <AlertTriangle className="size-4 shrink-0 text-[var(--warn)]" />
+      <span className="flex-1">{said}</span>
+      <Button variant="outline" size="sm" onClick={onRetry} disabled={busy}>
+        Retry
+      </Button>
+    </div>
+  );
 }
 
 function App() {
@@ -487,6 +525,8 @@ function App() {
             {error}
           </div>
         ) : null}
+
+        <TicketWarning health={snapshot?.linear} onRetry={() => refresh(true)} busy={loading} />
 
         {!snapshot && loading ? (
           <div className="text-muted-foreground flex items-center justify-center gap-2 py-24 text-sm">

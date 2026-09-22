@@ -276,6 +276,26 @@ export interface NextMove {
 }
 
 /**
+ * Whether the ticket half of the board can be believed.
+ *
+ * - `ok` — read from Linear during this refresh.
+ * - `off` — no Linear key is configured; there are no tickets to miss.
+ * - `stale` — this refresh could not reach Linear, so the issues are the ones
+ *   an earlier refresh read. `at` says when.
+ * - `partial` — Linear answered, but more assigned issues exist than were read.
+ * - `missing` — Linear failed and nothing earlier was kept.
+ *
+ * Anything but `ok` and `off` means a PR can be grouped under the wrong epic,
+ * which is indistinguishable from a correct board unless it is said out loud.
+ */
+export interface LinearHealth {
+  state: "ok" | "off" | "stale" | "partial" | "missing";
+  /** When the issues now on the board were read from Linear. */
+  at?: number;
+  error?: string;
+}
+
+/**
  * Exactly what `/api/data` sends. The server holds this inside its snapshot and
  * returns it whole, so a field cannot reach the browser by being forgotten in a
  * response literal — anything private lives in the server's cursors instead.
@@ -289,6 +309,7 @@ export interface Data {
   merged: MergedPR[];
   at: number;
   login: string;
+  linear: LinearHealth;
 }
 
 export interface Group {

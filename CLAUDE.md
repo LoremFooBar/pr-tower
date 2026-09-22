@@ -141,6 +141,30 @@ Three things about it:
 `FRESH_MS` still guards client-driven loads, but the five-minute timer means the
 snapshot is rarely old enough for it to matter.
 
+## When Linear does not answer
+
+The ticket half of a refresh must not fail the board, and it must not silently
+empty it either. With no issues, `buildModel` has no parent chain and no rollup,
+so every PR leaves its bay and lands in the singles ledger — a wrong board that
+looks exactly like a right one. That was the bug: one swallowed 429 and the
+whole epic structure disappeared until the next sync.
+
+- **A transient failure is retried before it counts as one.** A timeout, a 429
+  or a 5xx is tried three times with a doubling wait (`server/linear.ts`); a
+  rejected key is not retried, because it will be rejected again.
+- **A failure keeps the previous refresh's issues, never an empty list.** Stale
+  grouping is right about almost everything; no grouping is wrong about
+  everything.
+- **The rollup failing alone does not throw away fresh issues.** The grouping
+  still stands; what is lost is how far each epic has come — and an epic with
+  one open PR earns its bay from that count, so it costs sections too.
+- **`Data.linear` says which of those happened**, and the page says it out loud:
+  `ok`, `off` (no key), `stale`, `partial` (Linear had more assigned issues than
+  `MAX_PAGES` read) or `missing` (failed with nothing kept). Only `ok` and `off`
+  render nothing.
+- **`pnpm verify` takes Linear down mid-run** and asserts the bays survive, the
+  payload says `stale`, the banner appears, and all three clear when it is back.
+
 ## Desktop notifications
 
 A comment on one of the user's PRs raises a desktop notification. Two authors
