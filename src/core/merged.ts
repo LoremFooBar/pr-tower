@@ -1,5 +1,5 @@
-import { matchesQuery, searchableMerged } from "./search";
-import type { DeployState, DeployStep, MergedPR } from "./types";
+import { matchesQuery, searchableMerged, titleChain } from "./search";
+import type { DeployState, DeployStep, LinearIssue, MergedPR } from "./types";
 
 // Anything still moving sorts above anything finished, so a stuck deploy is the
 // first row whatever else merged since. Within a band, newest first.
@@ -32,9 +32,14 @@ export function stepLabel(step: DeployStep): string {
   return name.length > LABEL_MAX ? `${name.slice(0, LABEL_MAX - 1)}…` : name;
 }
 
-export function mergedView(merged: MergedPR[], query: string): MergedPR[] {
+export function mergedView(
+  merged: MergedPR[],
+  query: string,
+  issues: LinearIssue[] = [],
+): MergedPR[] {
+  const titles = titleChain(issues);
   const shown = query
-    ? merged.filter((pr) => matchesQuery(searchableMerged(pr), query))
+    ? merged.filter((pr) => matchesQuery(searchableMerged(pr, titles), query))
     : merged;
   return shown
     .slice()

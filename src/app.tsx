@@ -213,7 +213,7 @@ function App() {
   );
 
   const mergedShown = useMemo(
-    () => mergedView(snapshot?.merged ?? [], query),
+    () => mergedView(snapshot?.merged ?? [], query, snapshot?.issues ?? []),
     [snapshot, query],
   );
 
@@ -461,7 +461,7 @@ function App() {
               onChange={(event) => setQuery(event.target.value)}
               onFocus={() => setSearching(true)}
               onBlur={() => setSearching(false)}
-              placeholder="Filter by title, #number, repo, ticket"
+              placeholder="Filter by title, #number, repo, ticket, epic"
               aria-label="Filter pull requests"
               className={cn(
                 "h-8 w-full rounded-md border pl-8 text-sm outline-none transition-[color,background-color,border-color,box-shadow] [&::-webkit-search-cancel-button]:hidden",

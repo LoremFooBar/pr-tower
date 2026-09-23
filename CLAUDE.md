@@ -456,8 +456,13 @@ input is mounted the whole time rather than swapped in on click: focus is what
 opens it, which is the same path `/` takes, and it keeps the field findable by
 its label. `matchesQuery`
 (`src/core/search.ts`) tests the title, the repo, `#number`, the ticket and the
-epic; every token has to match, so a second word narrows rather than widens, and
-a leading `#` is dropped because a PR gets written both ways. The branch is
+epic, and the Linear titles of the ticket and of every ticket above it — the
+name of an epic is what a reader remembers about a bay, so a query naming it has
+to reach the PRs inside rather than only the heading. `titleChain` walks that
+chain and serves the merged strip too, which is the one place a row's ticket
+title is nowhere on screen. Every token has to match, so a second word narrows
+rather than widens, and a leading `#` is dropped because a PR gets written both
+ways. The branch is
 deliberately not searched: it repeats the ticket key and would otherwise match a
 token no row shows, which reads as a wrong result.
 

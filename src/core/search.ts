@@ -1,5 +1,5 @@
 import { stageOf } from "./rank";
-import type { Item, MergedPR, Stage } from "./types";
+import type { Item, LinearIssue, MergedPR, Stage } from "./types";
 
 /**
  * The fields a row is findable by, whatever kind of row it is. Open PRs and
@@ -12,27 +12,71 @@ export interface Searchable {
   number: number;
   ticket?: string;
   epic?: string;
+  /** The ticket's own title and every title above it, up to the epic. */
+  ticketTitles?: string[];
+}
+
+/** A ticket key to its own title and its ancestors', outermost last. */
+export type TitleChain = (key: string | undefined) => string[];
+
+const NO_TITLES: TitleChain = () => [];
+
+/**
+ * What a reader remembers about a bay is the epic's name, not its key, so a
+ * query naming the epic has to reach the PRs inside it rather than only the
+ * heading above them.
+ */
+export function titleChain(issues: LinearIssue[]): TitleChain {
+  const byKey = new Map(issues.map((issue) => [issue.id.toUpperCase(), issue]));
+  return (key) => {
+    const titles: string[] = [];
+    // Linear will not make a cycle, but one here would hang the page.
+    const seen = new Set<string>();
+    let current = key?.toUpperCase();
+    while (current && !seen.has(current)) {
+      seen.add(current);
+      const issue = byKey.get(current);
+      if (!issue) break;
+      titles.push(issue.title);
+      current = issue.parentId?.toUpperCase();
+    }
+    return titles;
+  };
 }
 
 // The branch is left out on purpose: it repeats the ticket key most of the time
 // and would otherwise match a token the row never shows, which reads as a wrong
 // result.
-export function searchableItem(item: Item): Searchable {
+export function searchableItem(item: Item, titles: TitleChain = NO_TITLES): Searchable {
   return {
     title: item.pr.title,
     repo: item.pr.repo,
     number: item.pr.number,
     ticket: item.issue?.id,
     epic: item.epicId,
+    ticketTitles: titles(item.issue?.id),
   };
 }
 
-export function searchableMerged(pr: MergedPR): Searchable {
-  return { title: pr.title, repo: pr.repo, number: pr.number, ticket: pr.issueKey };
+export function searchableMerged(pr: MergedPR, titles: TitleChain = NO_TITLES): Searchable {
+  return {
+    title: pr.title,
+    repo: pr.repo,
+    number: pr.number,
+    ticket: pr.issueKey,
+    ticketTitles: titles(pr.issueKey),
+  };
 }
 
 function haystack(row: Searchable): string {
-  return [row.title, row.repo, `#${row.number}`, row.ticket ?? "", row.epic ?? ""]
+  return [
+    row.title,
+    row.repo,
+    `#${row.number}`,
+    row.ticket ?? "",
+    row.epic ?? "",
+    ...(row.ticketTitles ?? []),
+  ]
     .join(" ")
     .toLowerCase();
 }

@@ -279,6 +279,24 @@ describe("the filter", () => {
     expect(shown("").sort((a, b) => a - b)).toEqual([77, 412, 902]);
   });
 
+  it("matches a ticket title, and an epic's title too", () => {
+    const issues = [
+      issue("ACME-9", { title: "Usage metering" }),
+      issue("ACME-100", { title: "Rollup endpoint", parentId: "ACME-9" }),
+      issue("ACME-200", { title: "Pricing cache" }),
+    ];
+    const prs = [
+      pr({ number: 412, title: "[ACME-100] Add the endpoint", repo: "billing-api" }),
+      pr({ number: 902, title: "[ACME-200] Cache the table", repo: "web" }),
+    ];
+    const found = (query: string) =>
+      buildModel(prs, issues, [], undefined, query).items.map((item) => item.pr.number);
+
+    expect(found("rollup")).toEqual([412]);
+    expect(found("metering")).toEqual([412]);
+    expect(found("pricing")).toEqual([902]);
+  });
+
   it("counts what is hidden, so the header can still say how many there are", () => {
     const model = buildModel(
       board().items.map((item) => item.pr),
@@ -1384,6 +1402,21 @@ describe("merged pull requests", () => {
       expect(mergedView(rows, "worker").map((pr) => pr.number)).toEqual([2]);
       expect(mergedView(rows, "#2").map((pr) => pr.number)).toEqual([2]);
       expect(mergedView(rows, "acme-1").map((pr) => pr.number)).toEqual([1]);
+    });
+
+    it("reaches a merged PR by its ticket title and its epic's", () => {
+      const rows = [
+        merged({ number: 1, title: "A change", issueKey: "ACME-1" }),
+        merged({ number: 2, title: "Another change", issueKey: "ACME-2" }),
+      ];
+      const issues = [
+        issue("ACME-9", { title: "Usage metering" }),
+        issue("ACME-1", { title: "Rollup endpoint", parentId: "ACME-9" }),
+        issue("ACME-2", { title: "Pricing cache" }),
+      ];
+      expect(mergedView(rows, "rollup", issues).map((pr) => pr.number)).toEqual([1]);
+      expect(mergedView(rows, "metering", issues).map((pr) => pr.number)).toEqual([1]);
+      expect(mergedView(rows, "pricing", issues).map((pr) => pr.number)).toEqual([2]);
     });
   });
 
