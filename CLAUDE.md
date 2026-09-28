@@ -388,10 +388,14 @@ left-click and post the URL to the extension, which brings the PR up in its
   the release checkbox, which is exactly the row where the pairing matters most.
   Every group carries the same left padding, tied or not, so a single row does
   not shift when its neighbour gains a partner (`Tie` in `parts.tsx`).
-- **The bracket does not extend to stacks.** It can only join rows that sit
-  together, and rows are grouped by ticket — a pair always is, a stack often is
-  not, since a stacked PR usually carries its own ticket. That is why a stack
-  says its position instead.
+- **A stack's rows sit together, bottom first**, where its best-placed member
+  would have been on the ladder. `stacksTogether` in `model.ts` does it for a
+  bay's tickets, the ledger, the no-ticket list and the queue. Left to the
+  ladder they scattered, because a stacked PR usually carries its own ticket and
+  its own score. It cannot join a stack across two bays, or a bay and the
+  ledger: a section is chosen by ticket, never by branch.
+- **The bracket does not extend to stacks.** It ties PRs of one ticket; a stack
+  usually spans several tickets, so it says its position instead.
 - **Out of draft is not the same as being read.** `reviewers` on a PR is
   everyone who submitted a review of any kind, the author and every bot removed:
   GitHub records a lone inline comment as a review of state `COMMENTED`, so this

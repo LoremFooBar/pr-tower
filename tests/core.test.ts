@@ -591,6 +591,41 @@ describe("stacks", () => {
     expect(model.items.find((item) => item.pr.number === 2)?.stack?.position).toBe(2);
   });
 
+  // The bottom PR is out for review and the top one is a draft, so the ladder
+  // alone would put an unrelated draft between them and the bottom one last.
+  const scattered = () => [
+    pr({ number: 1, title: "[ACME-11] bottom", headRef: "a", baseRef: "main", draft: false, bugbot: "success" }),
+    pr({ number: 2, title: "[ACME-12] unrelated", headRef: "x", baseRef: "main" }),
+    pr({ number: 3, title: "[ACME-13] top", headRef: "b", baseRef: "a" }),
+  ];
+
+  it("keeps a stack together in a bay, bottom first", () => {
+    const model = buildModel(
+      scattered(),
+      [
+        issue("ACME-10"),
+        issue("ACME-11", { parentId: "ACME-10" }),
+        issue("ACME-12", { parentId: "ACME-10" }),
+        issue("ACME-13", { parentId: "ACME-10" }),
+      ],
+      [],
+      NOW,
+    );
+
+    expect(model.bays[0].tickets.map((ticket) => ticket.key)).toEqual(["ACME-12", "ACME-11", "ACME-13"]);
+  });
+
+  it("keeps a stack together in the ledger, bottom first", () => {
+    const model = buildModel(
+      scattered(),
+      [issue("ACME-11"), issue("ACME-12"), issue("ACME-13")],
+      [],
+      NOW,
+    );
+
+    expect(model.singles.map((item) => item.pr.number)).toEqual([2, 1, 3]);
+  });
+
   // Stacking is context, not a gate: a stacked PR is perfectly reviewable, and
   // the reviewer usually wants the whole stack at once.
   it("leaves the gates and the lane alone", () => {

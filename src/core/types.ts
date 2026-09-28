@@ -257,6 +257,8 @@ export interface StackInfo {
   parent?: PullRequest;
   /** The PRs branched directly off this one. Empty at the top. */
   children: PullRequest[];
+  /** Id of the PR at the bottom, shared by every member, so it names the stack. */
+  bottom: number;
 }
 
 export interface TicketNode {

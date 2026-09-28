@@ -91,14 +91,16 @@ export function stacks(prs: PullRequest[]): Map<number, StackInfo> {
 
   // Walking up stops at a PR already seen. A branch cannot really be its own
   // ancestor, but a cycle here would hang the whole page.
-  const depth = (pr: PullRequest): number => {
+  const toBottom = (pr: PullRequest): { steps: number; bottom: PullRequest } => {
     const seen = new Set<number>([pr.id]);
     let steps = 0;
+    let bottom = pr;
     for (let above = parent.get(pr.id); above && !seen.has(above.id); above = parent.get(above.id)) {
       seen.add(above.id);
       steps++;
+      bottom = above;
     }
-    return steps + 1;
+    return { steps, bottom };
   };
 
   // Everything reachable through a base/head link, in either direction: a stack
@@ -125,16 +127,43 @@ export function stacks(prs: PullRequest[]): Map<number, StackInfo> {
     const members = chain(pr);
     if (members.length < 2) continue;
     for (const member of members) {
+      const { steps, bottom } = toBottom(member);
       info.set(member.id, {
         size: members.length,
-        position: depth(member),
+        position: steps + 1,
         parent: parent.get(member.id),
         children: children.get(member.id) ?? [],
+        bottom: bottom.id,
       });
     }
   }
   return info;
 }
+
+// Left to the ladder a stack scatters, because a stacked PR usually carries its
+// own ticket and its own score. It lands where its best-placed member would.
+function stacksTogether<T>(list: T[], stackOf: (entry: T) => StackInfo | undefined): T[] {
+  const members = new Map<number, T[]>();
+  for (const entry of list) {
+    const stack = stackOf(entry);
+    if (stack) members.set(stack.bottom, [...(members.get(stack.bottom) ?? []), entry]);
+  }
+  const placed = new Set<number>();
+  const out: T[] = [];
+  for (const entry of list) {
+    const stack = stackOf(entry);
+    if (!stack) out.push(entry);
+    else if (!placed.has(stack.bottom)) {
+      placed.add(stack.bottom);
+      const position = (member: T) => stackOf(member)?.position ?? 0;
+      out.push(...members.get(stack.bottom)!.slice().sort((a, b) => position(a) - position(b)));
+    }
+  }
+  return out;
+}
+
+const itemStack = (item: Item) => item.stack;
+const ticketStack = (ticket: TicketNode) => ticket.items.find((item) => item.stack)?.stack;
 
 // The spine is coarser than the stage chips by one step: a PR to merge and a PR
 // to release are both work that has come through, and the spine is about how
@@ -346,6 +375,7 @@ export function buildModel(
         b.items[0].score - a.items[0].score ||
         a.key.localeCompare(b.key, undefined, { numeric: true }),
     );
+    const ordered = stacksTogether(tickets, ticketStack);
     const lanes: Record<Lane, number> = { send: 0, held: 0, flight: 0, merge: 0, quiet: 0 };
     const stageTally = emptyStages();
     for (const item of groupItems) {
@@ -376,7 +406,7 @@ export function buildModel(
       key,
       title: index.byKey.get(key.toUpperCase())?.title ?? GROUP_TITLE[key] ?? key,
       epic: index.byKey.get(key.toUpperCase()),
-      tickets,
+      tickets: ordered,
       count: groupItems.length,
       repos: new Set(groupItems.map((item) => `${item.pr.owner}/${item.pr.repo}`)).size,
       lanes,
@@ -413,10 +443,16 @@ export function buildModel(
 
   const inBays = new Set(bays.flatMap((group) => group.tickets.flatMap((t) => t.items)));
   const rest = visible.filter((item) => !inBays.has(item));
-  const singles = rest.filter((item) => item.issue || prTicketKey(item.pr)).sort(byLadder);
-  const noTicket = rest.filter((item) => !item.issue && !prTicketKey(item.pr)).sort(byLadder);
+  const singles = stacksTogether(
+    rest.filter((item) => item.issue || prTicketKey(item.pr)).sort(byLadder),
+    itemStack,
+  );
+  const noTicket = stacksTogether(
+    rest.filter((item) => !item.issue && !prTicketKey(item.pr)).sort(byLadder),
+    itemStack,
+  );
 
-  const queue = visible.filter((item) => item.lane === "send").sort(byLadder);
+  const queue = stacksTogether(visible.filter((item) => item.lane === "send").sort(byLadder), itemStack);
 
   // When nothing is cleared, name the draft that is nearest to it.
   const closest =
