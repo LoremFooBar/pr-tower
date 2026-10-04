@@ -10,6 +10,13 @@ export type CheckStatus = "success" | "failure" | "pending";
 // flagging on a PR that is already out for review.
 export type BugbotState = "success" | "failure" | "pending" | "none";
 
+// The Risk Assessment workflow's verdict, read from its `risk:*` label.
+export type RiskLevel = "low" | "medium" | "high" | "critical";
+
+// The Auto-approve workflow's decision, read from its `approve:*` label.
+// `pending` means the risk assessment or Bugbot has not finished on this commit.
+export type ApprovalGate = "auto" | "manual" | "pending";
+
 export interface PullRequest {
   id: number;
   // GraphQL node id. Required to mark a PR ready for review — REST cannot.
@@ -49,6 +56,11 @@ export interface PullRequest {
   mergeState: string;
   bugbot: BugbotState;
   hasCI: boolean;
+  // Unset in a repository that runs neither workflow.
+  risk?: RiskLevel;
+  approval?: ApprovalGate;
+  // The `manual-reason:*` suffixes, e.g. `pr-size`. Only set beside `manual`.
+  manualReasons?: string[];
 }
 
 // Who wrote a comment, as far as this app cares. Every other bot is dropped, so

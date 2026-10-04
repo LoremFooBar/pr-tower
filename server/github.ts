@@ -11,6 +11,7 @@ import type {
   Reviewer,
 } from "../src/core/types";
 import { parseTicketKey } from "../src/core/link";
+import { gateFromLabels } from "../src/core/risk";
 
 // Overridable so the end-to-end test can point the real server at a local
 // stand-in for GitHub instead of reaching the internet.
@@ -65,6 +66,7 @@ interface SearchItem {
   created_at: string;
   updated_at: string;
   draft?: boolean;
+  labels?: { name: string }[];
 }
 
 interface PRDetail {
@@ -169,6 +171,7 @@ async function enrich(
     mergeState: "unknown",
     bugbot: "none",
     hasCI: false,
+    ...gateFromLabels((item.labels ?? []).map((label) => label.name)),
   };
 
   let notes: RawComment[] = [];

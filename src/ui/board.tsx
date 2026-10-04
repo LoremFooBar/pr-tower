@@ -11,7 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { prLink } from "@/lib/prhub";
-import { priorityLabel, Row, Tie } from "./parts";
+import { priorityLabel, Risk, Row, Tie } from "./parts";
 import { MergedUnderTickets } from "./merged";
 import { ChevronRight, Send, Sparkles } from "lucide-react";
 
@@ -254,6 +254,7 @@ export function Queue({ model, handlers }: { model: Model; handlers: Handlers })
                       +{item.pr.additions} −{item.pr.deletions}
                     </span>
                   ) : null}
+                  <Risk item={item} />
                 </div>
 
                 <div className="flex flex-wrap gap-1">

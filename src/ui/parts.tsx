@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { Item, LinearIssue, Reviewer, StackInfo } from "@/core/types";
 import { stripTicketPrefix } from "@/core/link";
+import { manualDespiteRisk, reasonText } from "@/core/risk";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -19,6 +20,7 @@ import {
   Link2Off,
   Loader2,
   Send,
+  UserRound,
 } from "lucide-react";
 
 const PRIORITY = ["", "Urgent", "High", "Medium", "Low"];
@@ -158,6 +160,67 @@ function readers(item: Item): Reviewer[] {
   return pr.reviewers ?? [];
 }
 
+const RISK_TONE: Record<string, string> = {
+  low: "text-[var(--ok)]",
+  medium: "text-muted-foreground",
+  high: "text-[var(--warn)]",
+  critical: "text-destructive",
+};
+
+const GATE_TEXT: Record<string, string> = {
+  auto: "Auto-approved",
+  manual: "Needs a human approval",
+  pending: "Auto-approve gate still waiting on this commit",
+};
+
+/** The risk assessment's level, and a flag when the gate wants a human anyway. */
+export function Risk({ item }: { item: Item }) {
+  const { pr } = item;
+  if (!pr.risk) return null;
+  const reasons = (pr.manualReasons ?? []).map(reasonText);
+  return (
+    <>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Badge
+            variant="outline"
+            data-risk={pr.risk}
+            className={cn("shrink-0 text-[10px] font-normal", RISK_TONE[pr.risk])}
+          >
+            {pr.risk} risk
+          </Badge>
+        </TooltipTrigger>
+        <TooltipContent className="max-w-xs">
+          <div>Risk assessment: {pr.risk}</div>
+          {pr.approval ? <div>{GATE_TEXT[pr.approval]}</div> : null}
+        </TooltipContent>
+      </Tooltip>
+      {manualDespiteRisk(pr) ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Badge
+              variant="outline"
+              data-manual
+              className="shrink-0 gap-1 text-[10px] font-normal text-[var(--warn)]"
+            >
+              <UserRound className="size-3" />
+              manual
+            </Badge>
+          </TooltipTrigger>
+          <TooltipContent className="max-w-xs">
+            <div>The gate wants a human approval despite {pr.risk} risk:</div>
+            {reasons.length > 0 ? (
+              reasons.map((reason) => <div key={reason}>· {reason}</div>)
+            ) : (
+              <div>· No reason label on the PR</div>
+            )}
+          </TooltipContent>
+        </Tooltip>
+      ) : null}
+    </>
+  );
+}
+
 function stackDetail(stack: StackInfo): string {
   const waiting = stack.children.map((child) => `#${child.number}`);
   const above = stack.parent ? `Branched off #${stack.parent.number}` : "Merges first";
@@ -258,6 +321,7 @@ export function Row({ item, picked, onPick, onRelease, busy, paired, eyebrow }: 
               <TooltipContent>{stackDetail(item.stack)}</TooltipContent>
             </Tooltip>
           ) : null}
+          <Risk item={item} />
         </div>
 
         <div className="text-muted-foreground mt-0.5 flex items-center gap-2 font-mono text-[11px]">

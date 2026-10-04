@@ -17,6 +17,7 @@ import type {
   Stage,
 } from "../src/core/types";
 import { blocker, isLive, mergedLine, mergedView, stepLabel } from "../src/core/merged";
+import { gateFromLabels, manualDespiteRisk, reasonText } from "../src/core/risk";
 
 const NOW = new Date("2026-08-26T12:00:00Z").getTime();
 
@@ -927,6 +928,54 @@ describe("resolveChecks", () => {
 
   it("treats a repository with no CI at all as green", () => {
     expect(resolveChecks("pending", 0, 0, false, false)).toBe("success");
+  });
+});
+
+describe("the risk gate", () => {
+  // The real label set on app#2064.
+  const labels = [
+    "risk:low",
+    "approve:manual",
+    "manual-reason:pr-size",
+    "manual-reason:bugbot-open",
+    "manual-reason:new-author",
+    "manual-reason:protected-path",
+  ];
+
+  it("reads the level, the decision and the reasons from the labels", () => {
+    expect(gateFromLabels(labels)).toEqual({
+      risk: "low",
+      approval: "manual",
+      manualReasons: ["pr-size", "bugbot-open", "new-author", "protected-path"],
+    });
+  });
+
+  it("ignores labels the workflows do not own", () => {
+    expect(gateFromLabels(["bug", "risk:unknown", "approve:maybe"])).toEqual({});
+  });
+
+  it("keeps the higher level when two risk labels overlap", () => {
+    expect(gateFromLabels(["risk:low", "risk:high"]).risk).toBe("high");
+  });
+
+  it("drops a stale reason once the decision is no longer manual", () => {
+    expect(gateFromLabels(["risk:low", "approve:auto", "manual-reason:pr-size"])).toEqual({
+      risk: "low",
+      approval: "auto",
+    });
+  });
+
+  it("flags a manual decision only below high risk", () => {
+    expect(manualDespiteRisk(pr(gateFromLabels(labels)))).toBe(true);
+    expect(manualDespiteRisk(pr(gateFromLabels(["risk:medium", "approve:manual"])))).toBe(true);
+    expect(manualDespiteRisk(pr(gateFromLabels(["risk:high", "approve:manual"])))).toBe(false);
+    expect(manualDespiteRisk(pr(gateFromLabels(["risk:low", "approve:pending"])))).toBe(false);
+    expect(manualDespiteRisk(pr(gateFromLabels(["approve:manual"])))).toBe(false);
+  });
+
+  it("still says something about a reason it has no wording for", () => {
+    expect(reasonText("pr-size")).toMatch(/500/);
+    expect(reasonText("too-late-on-friday")).toBe("too late on friday");
   });
 });
 

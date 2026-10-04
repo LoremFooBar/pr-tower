@@ -419,6 +419,14 @@ left-click and post the URL to the extension, which brings the PR up in its
 - **`state()`'s `flight` branch never renders.** A row in that lane, and in
   `merge`, shows `ReviewState` instead. Put anything about a PR out for review
   there, and anything true of every lane in `Row`.
+- **Risk and the auto-approve decision are read from labels, not comments.**
+  The Risk Assessment and Auto-approve workflows (`daylightsec/risk-assessment`)
+  label every PR `risk:*`, `approve:*` and `manual-reason:*`, and the search call
+  already returns labels, so this costs no request. The row shows the level
+  always. It flags `manual` only below high risk, because the gate auto-approves
+  only low and medium, so a high one held for a human is the expected case and
+  saying it would be noise. The tooltip names the reasons; their wording in
+  `src/core/risk.ts` mirrors that repository's `REASON_LABELS`.
 - **Blocked is not "need you".** A bay's counts separate them; there is nothing
   to do about a blocked PR yet.
 

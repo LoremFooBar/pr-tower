@@ -195,6 +195,22 @@ for (const theme of ["dark", "light"]) {
     if (faces < 1) problems.push("a reviewer's avatar never reached the page");
     if (external > 0) problems.push("an image on the page points somewhere external");
 
+    // billing-api #412 is medium risk yet the gate wants a human for its size;
+    // web #888 is high risk, where a manual decision is expected and says nothing.
+    const riskOn = (n) => page.locator(`#app [data-pr="${n}"] [data-risk]`).first().getAttribute("data-risk");
+    const manualOn = (n) => page.locator(`#app [data-pr="${n}"] [data-manual]`).count();
+    const [risk412, risk888, manual412, manual888] = await Promise.all([
+      riskOn(412),
+      riskOn(888),
+      manualOn(412),
+      manualOn(888),
+    ]);
+    console.log(`risk shown              : #412 ${risk412}, #888 ${risk888}`);
+    console.log(`manual flag             : #412 ${manual412 ? "yes" : "NO"}, #888 ${manual888 ? "YES" : "no"}`);
+    if (risk412 !== "medium" || risk888 !== "high") problems.push("a PR's risk level was not shown");
+    if (!manual412) problems.push("a medium-risk PR held for a human carried no manual flag");
+    if (manual888) problems.push("a high-risk PR was flagged as manual despite its risk");
+
     // Two PRs of ACME-980 are tied together, so exactly one group is bracketed.
     const tied = await page.locator("[data-tied]").count();
     console.log(`tied groups bracketed   : ${tied} (want 1+)`);
