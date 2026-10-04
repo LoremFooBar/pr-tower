@@ -264,6 +264,14 @@
      "type": "User",
      "avatar_url": "http://localhost:5179/avatar/reviewer.png"
     }
+   },
+   {
+    "state": "APPROVED",
+    "user": {
+     "login": "gatekeeper[bot]",
+     "type": "Bot",
+     "avatar_url": "http://localhost:5179/avatar/gatekeeper.png"
+    }
    }
   ],
   "acme/billing-api/418": [],

@@ -43,6 +43,9 @@ export interface PullRequest {
   // The people whose latest review is an approval. `approvals` is its length;
   // the names are what lets a new approval be told from an existing one.
   approvedBy?: string[];
+  // The same approvals with a face each. Bots stay in: an approval from the
+  // auto-approve gate is as much a verdict as a person's.
+  approvers?: Reviewer[];
   changesRequested: number;
   // People other than the author who have submitted a review of any kind,
   // comments included. Bots are left out: Bugbot's verdict has its own field,

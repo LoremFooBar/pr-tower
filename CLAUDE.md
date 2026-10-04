@@ -412,6 +412,11 @@ left-click and post the URL to the extension, which brings the PR up in its
   the stand-in API in a test — because the URL arrives inside an API response and
   nothing from outside should choose an address for the server. `pnpm verify`
   asserts every image on the page is a `data:` URI.
+- **An approval shows its approvers' faces, bots included.** The reader list
+  drops bots because a bot's remark is not someone reading the change, but an
+  approval is a verdict whoever gave it — the auto-approve gate's account is
+  usually the one approving. `approvers` carries them; `approvedBy` stays a
+  list of logins because the approval notification compares those.
 - **Readers are named on a draft too.** Someone reads a draft as readily as a PR
   already out for review, so `readers` and the faces live in `Row` rather than in
   `ReviewState`, which only renders for the `flight` and `merge` lanes. They hold

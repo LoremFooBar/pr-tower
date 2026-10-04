@@ -29,31 +29,36 @@ export function priorityLabel(issue?: LinearIssue): string {
   return issue ? (PRIORITY[issue.priority] ?? "") : "";
 }
 
+function Avatars({ who }: { who: Reviewer[] }) {
+  return (
+    <span className="inline-flex items-center">
+      {who.slice(0, 3).map((reviewer) =>
+        reviewer.avatar ? (
+          <img
+            key={reviewer.login}
+            src={reviewer.avatar}
+            alt=""
+            className="ring-background -ml-1 size-4 rounded-full ring-1 first:ml-0"
+          />
+        ) : (
+          <span
+            key={reviewer.login}
+            aria-hidden
+            className="bg-muted text-muted-foreground ring-background -ml-1 flex size-4 items-center justify-center rounded-full text-[8px] ring-1 first:ml-0"
+          >
+            {reviewer.login.slice(0, 1).toUpperCase()}
+          </span>
+        ),
+      )}
+    </span>
+  );
+}
+
 // One face is a face; a crowd is a face and a count, so the row keeps its width.
 function Faces({ who }: { who: Reviewer[] }) {
-  const shown = who.slice(0, 3);
   return (
     <span className="inline-flex items-center gap-1.5">
-      <span className="inline-flex items-center">
-        {shown.map((reviewer) =>
-          reviewer.avatar ? (
-            <img
-              key={reviewer.login}
-              src={reviewer.avatar}
-              alt=""
-              className="ring-background -ml-1 size-4 rounded-full ring-1 first:ml-0"
-            />
-          ) : (
-            <span
-              key={reviewer.login}
-              aria-hidden
-              className="bg-muted text-muted-foreground ring-background -ml-1 flex size-4 items-center justify-center rounded-full text-[8px] ring-1 first:ml-0"
-            >
-              {reviewer.login.slice(0, 1).toUpperCase()}
-            </span>
-          ),
-        )}
-      </span>
+      <Avatars who={who} />
       {who.length === 1 ? who[0].login : `${who.length} reviewing`}
     </span>
   );
@@ -140,9 +145,23 @@ function ReviewState({ item }: { item: Item }) {
   const missing = pr.bugbot === "none" && pr.hasCI;
   return (
     <span className="text-muted-foreground flex items-center gap-1.5 font-mono text-[11px]">
-      <span className={pr.approvals > 0 ? "text-[var(--ok)]" : undefined}>
-        {pr.approvals} approved
-      </span>
+      {pr.approvers && pr.approvers.length > 0 ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="inline-flex items-center gap-1.5 text-[var(--ok)]" data-approvers>
+              <Avatars who={pr.approvers} />
+              {pr.approvals} approved
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>
+            Approved by {pr.approvers.map((who) => who.login).join(", ")}
+          </TooltipContent>
+        </Tooltip>
+      ) : (
+        <span className={pr.approvals > 0 ? "text-[var(--ok)]" : undefined}>
+          {pr.approvals} approved
+        </span>
+      )}
       {pr.changesRequested > 0 ? (
         <span className="text-destructive">· {pr.changesRequested} changes</span>
       ) : null}

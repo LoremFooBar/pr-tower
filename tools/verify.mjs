@@ -195,6 +195,13 @@ for (const theme of ["dark", "light"]) {
     if (faces < 1) problems.push("a reviewer's avatar never reached the page");
     if (external > 0) problems.push("an image on the page points somewhere external");
 
+    // billing-api #412 is approved by a person and by a bot; both get a face.
+    const approverFaces = await page
+      .locator(`#app [data-pr="412"] [data-approvers] img[src^='data:image/']`)
+      .count();
+    console.log(`approver faces on #412  : ${approverFaces} (want 2)`);
+    if (approverFaces < 2) problems.push("an approver, bot or person, was shown without a face");
+
     // billing-api #412 is medium risk yet the gate wants a human for its size;
     // web #888 is high risk, where a manual decision is expected and says nothing.
     const riskOn = (n) => page.locator(`#app [data-pr="${n}"] [data-risk]`).first().getAttribute("data-risk");

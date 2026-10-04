@@ -203,12 +203,15 @@ async function enrich(
     // Only the latest review per person counts, so a comment after an approval
     // does not silently drop the approval.
     const latest = new Map<string, string>();
+    const faces = new Map<string, string | undefined>();
     for (const review of reviews) {
       if (review.state === "APPROVED" || review.state === "CHANGES_REQUESTED") {
         latest.set(review.user.login, review.state);
+        faces.set(review.user.login, review.user.avatar_url);
       }
     }
     base.approvedBy = [...latest].filter(([, state]) => state === "APPROVED").map(([who]) => who);
+    base.approvers = base.approvedBy.map((who) => ({ login: who, avatar: faces.get(who) }));
     base.approvals = base.approvedBy.length;
     base.changesRequested = [...latest.values()].filter((state) => state === "CHANGES_REQUESTED").length;
 
@@ -369,7 +372,7 @@ async function inlineAvatar(raw: string): Promise<string | undefined> {
 async function addAvatars(prs: PullRequest[]): Promise<void> {
   const wanted = new Map<string, Reviewer[]>();
   for (const pr of prs) {
-    for (const reviewer of pr.reviewers ?? []) {
+    for (const reviewer of [...(pr.reviewers ?? []), ...(pr.approvers ?? [])]) {
       if (!reviewer.avatar) continue;
       wanted.set(reviewer.avatar, [...(wanted.get(reviewer.avatar) ?? []), reviewer]);
     }
