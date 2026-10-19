@@ -88,6 +88,17 @@ describe("reaching Linear", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("skips tickets closed before the merged strip's longest window", async () => {
+    fetchMock.mockResolvedValueOnce(ok(issuePage(false, "ACME-1")));
+    const { fetchAssignedIssues } = await load();
+
+    await fetchAssignedIssues(KEY);
+
+    const { query } = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+    expect(query).toContain('nin: ["completed", "canceled", "duplicate"]');
+    expect(query).toContain('updatedAt: { gt: "-P90D" }');
+  });
+
   it("says the set is incomplete when Linear still has pages", async () => {
     fetchMock.mockImplementation(async () => ok(issuePage(true, "ACME-1")));
     const { fetchAssignedIssues } = await load();

@@ -1,8 +1,9 @@
 import type { Data, EpicRollup, LinearHealth, LinearIssue, LinearStateType } from "../src/core/types";
+import { MERGED_DAYS_MAX } from "./config";
 
 const API = process.env.LINEAR_API ?? "https://api.linear.app/graphql";
 const PAGE_SIZE = 100;
-const MAX_PAGES = 6;
+const MAX_PAGES = 10;
 
 export class LinearError extends Error {
   constructor(
@@ -129,9 +130,21 @@ const FIELDS = `
   project { name }
 `;
 
+// A closed ticket is still read while it can matter: an open PR on it raises
+// ticket drift, and a merged PR in the strip is searched by its title, whose
+// window reaches MERGED_DAYS_MAX. Reading every ticket ever closed instead
+// fills MAX_PAGES with years of history and marks the board partial.
+const ASSIGNED_FILTER = `{
+  assignee: { isMe: { eq: true } }
+  or: [
+    { state: { type: { nin: ["completed", "canceled", "duplicate"] } } }
+    { updatedAt: { gt: "-P${MERGED_DAYS_MAX}D" } }
+  ]
+}`;
+
 const ASSIGNED = `
   query Assigned($after: String, $first: Int!) {
-    issues(first: $first, after: $after, filter: { assignee: { isMe: { eq: true } } }, orderBy: updatedAt) {
+    issues(first: $first, after: $after, filter: ${ASSIGNED_FILTER}, orderBy: updatedAt) {
       pageInfo { hasNextPage endCursor }
       nodes {
         ${FIELDS}

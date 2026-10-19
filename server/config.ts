@@ -11,7 +11,7 @@ export interface Tokens {
 
 // A window nobody would type on purpose still has to produce a search GitHub
 // will accept, so it is clamped rather than trusted.
-const MERGED_DAYS_MAX = 90;
+export const MERGED_DAYS_MAX = 90;
 
 // Tokens live only here, in the container. They are never sent to the browser:
 // every response that mentions them says whether one is set, not what it is.
